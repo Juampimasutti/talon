@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: talon_admin
+      POSTGRES_PASSWORD: talon_admin
+      POSTGRES_DB: talon
+    ports:
+      - "5432:5432"
+    volumes:
+      - talon-data:/var/lib/postgresql/data
+
+volumes:
+  talon-data:

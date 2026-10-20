@@ -1,0 +1,65 @@
+{
+  "monolithGzip": 87384,
+  "monolithBytes": 271322,
+  "largestScreen": "src/components/directorio/directorio-screen.tsx",
+  "largestGzip": 66439,
+  "tableroGzip": 7095,
+  "parts": [
+    {
+      "screen": "directorio-screen.tsx",
+      "gzip": 66439
+    },
+    {
+      "screen": "articulos-screen.tsx",
+      "gzip": 65629
+    },
+    {
+      "screen": "configuracion-screen.tsx",
+      "gzip": 44281
+    },
+    {
+      "screen": "lista-screen.tsx",
+      "gzip": 40726
+    },
+    {
+      "screen": "editor-screen.tsx",
+      "gzip": 36342
+    },
+    {
+      "screen": "stock-screen.tsx",
+      "gzip": 34565
+    },
+    {
+      "screen": "cuentas-screen.tsx",
+      "gzip": 34443
+    },
+    {
+      "screen": "caja-screen.tsx",
+      "gzip": 34267
+    },
+    {
+      "screen": "comprobantes-screen.tsx",
+      "gzip": 34051
+    },
+    {
+      "screen": "ingreso-screen.tsx",
+      "gzip": 29107
+    },
+    {
+      "screen": "detalle-screen.tsx",
+      "gzip": 27374
+    },
+    {
+      "screen": "tablero-screen.tsx",
+      "gzip": 7095
+    },
+    {
+      "screen": "auditoria-screen.tsx",
+      "gzip": 5123
+    },
+    {
+      "screen": "contabilidad-screen.tsx",
+      "gzip": 5017
+    }
+  ]
+}

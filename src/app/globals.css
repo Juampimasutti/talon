@@ -1,0 +1,270 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: "Segoe UI", Arial, Helvetica, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  --font-heading: "Segoe UI", Arial, Helvetica, sans-serif;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.5;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.25);
+  --radius-2xl: calc(var(--radius) * 1.5);
+  --radius-3xl: calc(var(--radius) * 1.75);
+  --radius-4xl: calc(var(--radius) * 2);
+}
+
+:root {
+  --background: #f3f6fa;
+  --foreground: #243448;
+  --card: #ffffff;
+  --card-foreground: #243448;
+  --popover: #ffffff;
+  --popover-foreground: #243448;
+  --primary: #1266d6;
+  --primary-foreground: #ffffff;
+  --secondary: #eaf0f6;
+  --secondary-foreground: #35465b;
+  --muted: #f0f3f7;
+  --muted-foreground: #647387;
+  --accent: #e9f2ff;
+  --accent-foreground: #174e94;
+  --destructive: #b63c3c;
+  --border: #dce3ec;
+  --input: #c5cfdb;
+  --ring: #1266d6;
+  --chart-1: #1266d6;
+  --chart-2: #158389;
+  --chart-3: #b07825;
+  --chart-4: #727fb4;
+  --chart-5: #63768e;
+  --radius: 0.25rem;
+  --sidebar: #172a40;
+  --sidebar-foreground: #edf3fc;
+  --sidebar-primary: #1475ee;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #233c56;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #364b63;
+  --sidebar-ring: #70b1ff;
+  --talon-stripe: #f9fbfd;
+  --talon-success: #28744b;
+  --talon-warning: #94621e;
+}
+
+.dark {
+  --background: #111c2a;
+  --foreground: #e5edf7;
+  --card: #19283a;
+  --card-foreground: #e5edf7;
+  --popover: #19283a;
+  --popover-foreground: #e5edf7;
+  --primary: #5298f5;
+  --primary-foreground: #10223b;
+  --secondary: #26374c;
+  --secondary-foreground: #e5edf7;
+  --muted: #203044;
+  --muted-foreground: #a4b4c8;
+  --accent: #243f62;
+  --accent-foreground: #dceaff;
+  --destructive: #ee9292;
+  --border: #32445b;
+  --input: #4b5e77;
+  --ring: #73b0ff;
+  --sidebar: #101e30;
+  --sidebar-foreground: #edf3fc;
+  --sidebar-primary: #176bdd;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #233c56;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #364b63;
+  --sidebar-ring: #70b1ff;
+  --talon-stripe: #1c2c40;
+  --talon-success: #8fd5ac;
+  --talon-warning: #e7bd78;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-size: 0.875rem;
+    font-variant-numeric: tabular-nums;
+  }
+  h1, h2, .font-heading {
+    font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* Shared presentation only. Business rules and synchronization live elsewhere. */
+@layer components {
+  .talon-topbar {
+    @apply sticky top-0 z-30 flex min-h-14 flex-wrap items-center justify-between gap-x-5 gap-y-2 border-b bg-card px-4 py-2 print:hidden;
+  }
+  .talon-brand {
+    @apply text-2xl font-semibold tracking-tight text-primary;
+  }
+  .talon-nav-link {
+    @apply flex min-h-9 items-center gap-2.5 rounded-sm px-3 py-2 text-sm text-sidebar-foreground/85 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground;
+  }
+  .talon-nav-link[aria-current="page"] {
+    @apply bg-sidebar-primary text-sidebar-primary-foreground;
+    box-shadow: inset 3px 0 0 #84bdff;
+  }
+  .talon-panel-title {
+    @apply border-b bg-card px-4 py-3 text-sm font-semibold;
+  }
+  .talon-metric {
+    @apply min-w-0 rounded-lg border bg-card px-4 py-3;
+  }
+  .talon-metric-value {
+    font-size: clamp(1.125rem, 1.55vw, 1.5rem);
+    @apply mt-2 overflow-x-auto font-semibold leading-snug tracking-tight whitespace-nowrap tabular-nums;
+  }
+  .talon-metric-balance {
+    @apply text-base leading-relaxed whitespace-normal;
+  }
+  .talon-data-table {
+    @apply w-full border-collapse text-left text-sm;
+  }
+  .talon-data-table th {
+    @apply border-b bg-muted px-3 py-2 text-xs font-semibold whitespace-nowrap text-muted-foreground;
+  }
+  .talon-data-table td {
+    @apply border-b border-border/70 px-3 py-2;
+  }
+  .talon-data-table tbody tr {
+    @apply relative hover:bg-accent/60;
+  }
+  .talon-data-table tbody tr:nth-child(even) {
+    background-color: var(--talon-stripe);
+  }
+  .talon-data-table tbody tr:nth-child(even):hover {
+    @apply bg-accent/60;
+  }
+  .talon-data-table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+  .talon-row-link::after {
+    content: "";
+    @apply absolute inset-0;
+  }
+  .talon-row-link:focus-visible::after {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
+  }
+  .talon-state {
+    @apply inline-flex items-center gap-1.5 whitespace-nowrap text-xs;
+    color: var(--talon-success);
+  }
+  .talon-state::before {
+    content: "";
+    @apply size-1.5 shrink-0 rounded-full bg-current;
+  }
+}
+
+@media screen {
+  /* Operational screens keep their content, order, handlers and field sizes. */
+  .talon-app main h1 {
+    font-size: 1.375rem;
+    font-weight: 600;
+    line-height: 1.35;
+    letter-spacing: -0.025em;
+  }
+  .talon-app main h2 {
+    font-weight: 600;
+  }
+  [data-slot="table-header"] {
+    background: var(--muted);
+  }
+  [data-slot="table-head"] {
+    color: var(--muted-foreground);
+    font-size: 0.75rem;
+    font-weight: 600;
+    height: 2rem;
+  }
+  [data-slot="table-body"] > tr:nth-child(even) {
+    background: var(--talon-stripe);
+  }
+  [data-slot="table-body"] > tr:hover {
+    background: var(--accent);
+  }
+}
+
+@media (pointer: coarse) {
+  [data-slot="button"], [data-slot="input"], [data-slot="select-trigger"],
+  .talon-nav-link, .talon-app a.inline-flex {
+    min-height: 2.75rem;
+  }
+  [data-slot="input"], [data-slot="textarea"], select {
+    font-size: 1rem;
+  }
+}
+
+@media print {
+  .talon-app {
+    display: block;
+    background: white;
+  }
+}
+
+/* Keep navigation usable while long operational screens scroll. */
+@media screen and (min-width: 1024px) {
+  .talon-sidebar {
+    position: sticky;
+    top: 57px;
+    align-self: start;
+    height: calc(100dvh - 57px);
+  }
+}
+@media screen and (max-width: 767px) {
+  .talon-document-fields label,
+  .talon-document-fields > div {
+    min-width: 0;
+  }
+  .talon-document-fields select {
+    width: 100%;
+    min-width: 0;
+  }
+}

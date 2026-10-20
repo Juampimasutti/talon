@@ -1,0 +1,19 @@
+{
+  "protected_files_checked": 95,
+  "all_unchanged": true,
+  "modified_presentation_files": [
+    "src/app/globals.css",
+    "src/components/shell/panel-shell.tsx",
+    "src/components/virtual-table.tsx",
+    "src/components/documentos/editor-screen.tsx",
+    "src/components/directorio/directorio-screen.tsx"
+  ],
+  "tests": {
+    "passed": 78,
+    "skipped": 0
+  },
+  "lint": {
+    "errors": 18,
+    "warnings": 13
+  }
+}
