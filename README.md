@@ -2,6 +2,8 @@
 
 Mejoras y mediciones actuales: [reporte de rendimiento](docs/reporte-rendimiento.md).
 
+Demo persistente con escenarios ficticios: `npm run demo`. [Preparación, acceso y datos](docs/demo-fija.md).
+
 Gestión comercial horizontal para Argentina. Sirve para una distribuidora, un comercio, un depósito o un estudio: cada empresa prende los módulos que usa. La interfaz está en español rioplatense.
 
 Hay dos empresas de prueba. **Distribuidora Paraná SRL** es responsable inscripto y usa ventas, compras, stock, pedidos, remitos y caja. **Costa & Asociados** es monotributo y solo factura servicios. Laura está en las dos y puede cambiar de empresa desde el menú.

@@ -16,6 +16,8 @@
     "measure:bundle": "node scripts/measure-bundle.mjs",
     "measure:renders": "vitest run src/lib/ui/render-budget.test.tsx",
     "local": "tsx scripts/local.ts",
+    "demo:setup": "tsx scripts/demo-fija.ts",
+    "demo": "tsx scripts/demo-fija.ts --serve",
     "local:prod": "next build && node scripts/shell-assets.mjs && next start --hostname 0.0.0.0 --port 4318"
   },
   "dependencies": {
