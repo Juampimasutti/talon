@@ -1,0 +1,18 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: talon_admin
+      POSTGRES_PASSWORD: ${TALON_WINDOWS_DB_PASSWORD:?Falta la clave local}
+      POSTGRES_DB: talon_amigo_demo
+    ports:
+      - "127.0.0.1:${TALON_WINDOWS_DB_PORT:?Falta el puerto}:5432"
+    volumes:
+      - datos:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U talon_admin -d talon_amigo_demo"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+volumes:
+  datos:

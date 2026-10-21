@@ -1,0 +1,39 @@
+TALON - DEMO LOCAL PARA WINDOWS
+
+1. Instala Node.js 24 LTS desde https://nodejs.org/
+2. Instala Docker Desktop desde https://www.docker.com/products/docker-desktop/
+   Completa WSL/reinicios si Docker los solicita. Abri Docker Desktop y espera
+   a que este listo.
+3. Extrae TODO el ZIP en una carpeta propia, por ejemplo Documentos\TalonDemo.
+   No ejecutes archivos desde dentro del ZIP. No lo copies encima de otra instalacion.
+4. Hace doble clic en INSTALAR-TALON.cmd. Necesita internet la primera vez
+   y puede tardar varios minutos. No hace falta ejecutar como administrador.
+5. Cuando termine, usa ABRIR-TALON.cmd o el acceso directo del escritorio.
+   El navegador se abre automaticamente. Deja la ventana de Talon abierta.
+
+INGRESO DE PRUEBA
+Usuario: laura@talon.demo
+Clave: talon1234
+En el selector de Empresa elegi: Inmobiliaria Demo.
+Incluye datos FICTICIOS para recorrer propiedades, contratos y alquileres.
+Tambien hay otras empresas de demostracion. No reemplaza la facturacion fiscal.
+ARCA sigue pendiente. La demo solo escucha en esta PC, no en internet ni la red.
+
+PARA VOLVER A USARLO OTRO DIA
+Abri Docker Desktop, espera a que arranque y usa ABRIR-TALON.cmd.
+Para cerrar Talon usa Ctrl+C en su ventana. Los datos permanecen guardados.
+No hace falta reinstalar cada dia. No borres los volumenes de Docker.
+
+RESPALDOS Y DATOS
+Los respaldos automaticos van a backups mientras Talon esta abierto.
+Guarda una copia en otro dispositivo. Antes de migrar, el instalador guarda
+ademas un respaldo PostgreSQL en backups\instalador; requiere recuperacion tecnica.
+No compartas .env.local, backups, .talon-windows.json ni la carpeta completa
+ya instalada. Para otra PC manda el ZIP original, no tu instalacion configurada.
+No hay sincronizacion entre PCs.
+
+ALCANCE
+Es un instalador guiado, no un .exe independiente que incluya Node y Docker.
+El flujo de instalacion y arranque se comprobo en Linux. Los .cmd, el acceso
+directo y la experiencia de Windows todavia requieren prueba en una PC Windows.
+Instrucciones y verificaciones: docs\instalacion-windows-demo.md

@@ -1,5 +1,7 @@
 # Talón
 
+Demo en una PC Windows: [instalador guiado y requisitos](docs/instalacion-windows-demo.md).
+
 Venta y cobro en celular: [cambios, capturas y piloto de uso](docs/venta-cobro-celular.md).
 
 Pulido v3 y pendientes revisados: [cambios, pruebas y respaldos en Windows](docs/pulido-v3.md).

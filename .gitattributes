@@ -1,0 +1,4 @@
+# Conservar CRLF en los lanzadores descargables de Windows.
+/ABRIR-TALON.cmd -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+/INSTALAR-TALON.cmd -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+/LEEME-INSTALACION.txt -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

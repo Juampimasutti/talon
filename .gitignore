@@ -45,3 +45,7 @@ next-env.d.ts
 
 # respaldos locales con datos privados
 /backups/
+
+# Estado privado del instalador local
+/.talon-windows.json
+/.talon-npm-cache/
