@@ -1,5 +1,7 @@
 # Talón
 
+Venta y cobro en celular: [cambios, capturas y piloto de uso](docs/venta-cobro-celular.md).
+
 Pulido v3 y pendientes revisados: [cambios, pruebas y respaldos en Windows](docs/pulido-v3.md).
 
 Mejoras de uso, reversiones y respaldos: [guía de actualización](docs/mejoras-uso-y-seguridad.md). ARCA queda pendiente.

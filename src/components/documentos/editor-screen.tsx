@@ -152,6 +152,8 @@ export function EditorScreen({ kind }: { kind: keyof typeof META }) {
   const [lines, setLines] = useState<DraftLine[]>([]);
   const [sku, setSku] = useState("");
   const [hits, setHits] = useState<ProductHit[]>([]);
+  const [searchPending, setSearchPending] = useState(false);
+  const searchLock = useRef(false);
   const [pending, setPending] = useState(false);
   const [credit, setCredit] = useState<string | null>(null);
 
@@ -571,7 +573,9 @@ export function EditorScreen({ kind }: { kind: keyof typeof META }) {
 
   async function searchSku(value: string) {
     const query = value.trim();
-    if (!query) return;
+    if (!query || searchLock.current) return;
+    searchLock.current = true;
+    setSearchPending(true);
     try {
       const exact = await apiGet<{ items: ProductHit[] }>(
         `/api/articulos?q=${encodeURIComponent(query)}&exact=1&pageSize=5${listId ? `&priceListId=${listId}` : ""}`,
@@ -593,6 +597,9 @@ export function EditorScreen({ kind }: { kind: keyof typeof META }) {
           ? error.message
           : "No se pudo buscar el artículo",
       );
+    } finally {
+      searchLock.current = false;
+      setSearchPending(false);
     }
   }
 
@@ -915,88 +922,15 @@ export function EditorScreen({ kind }: { kind: keyof typeof META }) {
         ) : null}
       </div>
 
-      <div className="overflow-auto rounded-lg border bg-card">
-        <p className="sticky left-0 border-b bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground md:hidden">
-          Deslizá la tabla para ver cantidades, precios y totales →
-        </p>
-        <table className="w-full min-w-[720px] text-sm">
-          <thead className="bg-muted/70 text-left text-xs text-muted-foreground">
-            <tr>
-              <th className="px-3 py-2">Código</th>
-              <th className="px-3 py-2">Descripción</th>
-              <th className="px-3 py-2">Cant.</th>
-              <th className="px-3 py-2">{priceHint}</th>
-              <th className="px-3 py-2">Dto %</th>
-              <th className="px-3 py-2 text-right">Total</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {lines.map((line, index) => (
-              <tr key={line.key} className="border-t">
-                <td className="px-3 py-2">{line.sku}</td>
-                <td className="px-3 py-2">{line.description}</td>
-                <td className="px-3 py-2">
-                  <Input
-                    id={`line-quantity-${index}`}
-                    aria-label={`Cantidad de ${line.description}`}
-                    aria-invalid={invalidField === `line-quantity-${index}`}
-                    className="w-20"
-                    value={line.quantity}
-                    onChange={(event) =>
-                      updateLine(index, { quantity: event.target.value })
-                    }
-                  />
-                </td>
-                <td className="px-3 py-2">
-                  <Input
-                    id={`line-price-${index}`}
-                    aria-label={`Precio de ${line.description}`}
-                    aria-invalid={invalidField === `line-price-${index}`}
-                    className="w-28"
-                    value={line.price}
-                    onChange={(event) =>
-                      updateLine(index, { price: event.target.value })
-                    }
-                  />
-                </td>
-                <td className="px-3 py-2">
-                  <Input
-                    id={`line-discount-${index}`}
-                    aria-label={`Descuento de ${line.description}`}
-                    aria-invalid={invalidField === `line-discount-${index}`}
-                    className="w-16"
-                    value={line.discount}
-                    onChange={(event) =>
-                      updateLine(index, { discount: event.target.value })
-                    }
-                  />
-                </td>
-                <td className="px-3 py-2 text-right">
-                  {formatMoney(totals.lines[index]?.totalCents ?? 0)}
-                </td>
-                <td className="px-3 py-2">
-                  <button
-                    type="button"
-                    className="text-destructive"
-                    onClick={() =>
-                      setLines((current) =>
-                        current.filter((item) => item.key !== line.key),
-                      )
-                    }
-                  >
-                    Quitar
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div className="grid gap-2 border-t p-3 md:grid-cols-[220px_1fr]">
+      <div className="min-w-0 rounded-lg border bg-card">
+        <div className="grid gap-2 border-b p-3 md:grid-cols-[220px_1fr]">
+          <div className="flex min-w-0 gap-2">
           <Input
             ref={skuRef}
+            className="h-10 md:h-8"
             aria-label="Código de artículo"
             placeholder="Código o nombre y Enter"
+            enterKeyHint="search"
             value={sku}
             onChange={(event) => setSku(event.target.value)}
             onKeyDown={(event) => {
@@ -1006,13 +940,15 @@ export function EditorScreen({ kind }: { kind: keyof typeof META }) {
               }
             }}
           />
+          <Button type="button" className="h-10 shrink-0 md:hidden" disabled={searchPending || !sku.trim()} onClick={() => void searchSku(sku)}>{searchPending ? "Buscando…" : "Buscar"}</Button>
+          </div>
           {hits.length > 1 ? (
             <ul className="max-h-40 overflow-auto rounded-lg border">
               {hits.map((hit) => (
                 <li key={hit.id}>
                   <button
                     type="button"
-                    className="block w-full px-3 py-2 text-left hover:bg-accent"
+                    className="block min-h-11 w-full px-3 py-2 text-left hover:bg-accent"
                     onClick={() => addProduct(hit)}
                   >
                     {hit.sku} · {hit.name}
@@ -1026,6 +962,89 @@ export function EditorScreen({ kind }: { kind: keyof typeof META }) {
             </p>
           )}
         </div>
+        <div className="min-w-0 md:overflow-auto">
+        <table className="block w-full text-sm md:table md:min-w-[720px]">
+          <thead className="hidden bg-muted/70 text-left text-xs text-muted-foreground md:table-header-group">
+            <tr>
+              <th className="px-3 py-2">Código</th>
+              <th className="px-3 py-2">Descripción</th>
+              <th className="px-3 py-2">Cant.</th>
+              <th className="px-3 py-2">{priceHint}</th>
+              <th className="px-3 py-2">Dto %</th>
+              <th className="px-3 py-2 text-right">Total</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody className="block md:table-row-group">
+            {lines.map((line, index) => (
+              <tr key={line.key} className="grid grid-cols-2 gap-x-3 gap-y-2 border-t p-3 first:border-t-0 md:table-row md:p-0 md:first:border-t">
+                <td className="col-span-2 min-w-0 break-words text-xs text-muted-foreground md:px-3 md:py-2 md:text-sm">{line.sku}</td>
+                <td className="col-span-2 min-w-0 break-words font-medium md:px-3 md:py-2 md:font-normal">{line.description}</td>
+                <td className="min-w-0 md:px-3 md:py-2">
+                  <span className="mb-1 block text-xs text-muted-foreground md:hidden">Cantidad</span>
+                  <Input
+                    inputMode="decimal"
+                    id={`line-quantity-${index}`}
+                    aria-label={`Cantidad de ${line.description}`}
+                    aria-invalid={invalidField === `line-quantity-${index}`}
+                    className="h-10 w-full md:h-8 md:w-20"
+                    value={line.quantity}
+                    onChange={(event) =>
+                      updateLine(index, { quantity: event.target.value })
+                    }
+                  />
+                </td>
+                <td className="min-w-0 md:px-3 md:py-2">
+                  <span className="mb-1 block text-xs text-muted-foreground md:hidden">{priceHint}</span>
+                  <Input
+                    inputMode="decimal"
+                    id={`line-price-${index}`}
+                    aria-label={`Precio de ${line.description}`}
+                    aria-invalid={invalidField === `line-price-${index}`}
+                    className="h-10 w-full md:h-8 md:w-28"
+                    value={line.price}
+                    onChange={(event) =>
+                      updateLine(index, { price: event.target.value })
+                    }
+                  />
+                </td>
+                <td className="min-w-0 md:px-3 md:py-2">
+                  <span className="mb-1 block text-xs text-muted-foreground md:hidden">Descuento %</span>
+                  <Input
+                    inputMode="decimal"
+                    id={`line-discount-${index}`}
+                    aria-label={`Descuento de ${line.description}`}
+                    aria-invalid={invalidField === `line-discount-${index}`}
+                    className="h-10 w-full md:h-8 md:w-16"
+                    value={line.discount}
+                    onChange={(event) =>
+                      updateLine(index, { discount: event.target.value })
+                    }
+                  />
+                </td>
+                <td className="min-w-0 self-end text-right tabular-nums md:px-3 md:py-2">
+                  <span className="mb-1 block text-xs text-muted-foreground md:hidden">Total del renglón</span>
+                  {formatMoney(totals.lines[index]?.totalCents ?? 0)}
+                </td>
+                <td className="col-span-2 min-w-0 text-right md:px-3 md:py-2">
+                  <button
+                    type="button"
+                    className="min-h-10 text-destructive md:min-h-0"
+                    onClick={() =>
+                      setLines((current) =>
+                        current.filter((item) => item.key !== line.key),
+                      )
+                    }
+                  >
+                    Quitar
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        </div>
+        {!lines.length ? <p className="px-3 pb-3 text-sm text-muted-foreground">Buscá un artículo para agregar el primer renglón.</p> : null}
       </div>
 
       <div className="grid items-start gap-4 md:grid-cols-[1fr_280px]">
