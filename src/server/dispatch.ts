@@ -47,6 +47,9 @@ import { estacion } from "./estacion";
 import { reparto } from "./reparto";
 import { sync } from "./sync";
 import { informes } from "./informes";
+import { constructora } from "./constructora";
+import { inmobiliaria } from "./inmobiliaria";
+import { companyManagement } from "./company-management";
 import { migracion } from "./migracion";
 
 const KIND_MODULE: Record<DocumentKind, ModuleKey> = {
@@ -71,6 +74,9 @@ export async function dispatch(method: string, path: string[], req: Request): Pr
     return ok({ db: rows[0]?.ok === 1 });
   }
 
+  if (root === "constructora") return constructora(method, path, req);
+  if (root === "inmobiliaria") return inmobiliaria(method, path, req);
+  if (root === "empresas") return companyManagement(method, path, req);
   if (root === "auth") return authRoutes(method, id, req);
   if (method === "GET" && root === "tablero") return tablero();
   if (method === "GET" && root === "catalogos") return catalogos();
@@ -112,7 +118,13 @@ async function authRoutes(method: string, action: string | undefined, req: Reque
     if (!user || !user.active || !valid) throw new HttpError(401, "El mail o la clave no coinciden");
     const home = await getDb().execute<{ company_id: string | null }>(sql`select auth_home_company(${user.id}::uuid) as company_id`);
     const companyId = home[0]?.company_id;
-    if (!companyId) throw new HttpError(403, "Tu usuario no está en ninguna empresa activa");
+    if (!companyId) {
+      const [backup] = await getDb().execute<{ available: boolean }>(sql`select company_user_has_backups(${user.id}::uuid) as available`);
+      const [operator] = await getDb().execute<{ available: boolean }>(sql`select company_user_is_operator(${user.id}::uuid) as available`);
+      if (!backup.available && !operator.available) throw new HttpError(403, "Tu usuario no está en ninguna empresa activa");
+      await startSession(user.id, "00000000-0000-0000-0000-000000000000");
+      return ok(operator.available ? { companySetupOnly: true } : { backupOnly: true });
+    }
     const token = await startSession(user.id, companyId);
     const auth = await authFromToken(token, companyId);
     if (!auth) throw new HttpError(500, "No pude abrir la sesión");
@@ -261,16 +273,18 @@ async function catalogos() {
   if (!auth) throw new HttpError(401, "Tenés que iniciar sesión");
   return withTenant(auth.company.companyId, auth.user.id, async (tx) => {
     const companyId = auth.company.companyId;
-    const [lists, deps, types, cash, rubros, fields] = await Promise.all([
+    const [lists, deps, types, cash, rubros, fields, points] = await Promise.all([
       tx.select().from(priceLists).where(eq(priceLists.companyId, companyId)).orderBy(asc(priceLists.name)),
       tx.select().from(warehouses).where(eq(warehouses.companyId, companyId)).orderBy(asc(warehouses.name)),
       tx.select().from(documentTypes).where(and(eq(documentTypes.companyId, companyId), eq(documentTypes.active, true))).orderBy(asc(documentTypes.code)),
       tx.select().from(cashAccounts).where(and(eq(cashAccounts.companyId, companyId), eq(cashAccounts.active, true))).orderBy(asc(cashAccounts.name)),
       tx.select().from(categories).where(eq(categories.companyId, companyId)).orderBy(asc(categories.name)),
       tx.select().from(customFieldDefs).where(eq(customFieldDefs.companyId, companyId)).orderBy(asc(customFieldDefs.position)),
+      tx.execute<{ number: number }>(sql`select number from company_points_of_sale where company_id=${companyId} order by number`),
     ]);
     return ok(
       {
+        pointsOfSale: points.map((point) => point.number),
         priceLists: lists,
         warehouses: deps,
         documentTypes: types,
@@ -1518,7 +1532,7 @@ async function rolesRoute(method: string, id: string | undefined, req: Request) 
     return withTenant(auth.company.companyId, auth.user.id, async (tx) => {
       const [role] = await tx
         .update(roles)
-        .set({ name: body.name, description: body.description })
+        .set({ name: body.name, description: body.description, isSystem: false })
         .where(and(eq(roles.id, id), eq(roles.companyId, auth.company.companyId)))
         .returning();
       if (!role) throw new HttpError(404, "No encontramos el puesto");

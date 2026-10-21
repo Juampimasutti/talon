@@ -49,6 +49,7 @@ export const productSchema = z.object({
 export const documentSchema = z.object({
   kind: z.enum(["venta", "compra", "pedido", "remito"]),
   documentTypeId: z.string().uuid(),
+  pointOfSale: z.number().int().min(1).max(99999).optional(),
   partyId: z.string().uuid(),
   issuedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "La fecha tiene que ser AAAA-MM-DD"),
   paymentMethod: z.enum(["contado", "cuenta_corriente"]).optional(),
@@ -90,13 +91,13 @@ export const companySchema = z.object({
   address: z.string().trim().max(160).optional().default(""),
   city: z.string().trim().max(80).optional().default(""),
   province: z.string().trim().max(80).optional().default(""),
-  pointOfSale: z.number().int().min(1).max(9999),
+  pointOfSale: z.number().int().min(1).max(99999),
   blockNegativeStock: z.boolean(),
   allowNegativeCash: z.boolean().optional().default(false),
   enabledModules: z.array(z.string()).max(32),
 });
 
-export async function readBody<T>(req: Request, schema: z.ZodType<T>): Promise<T> {
+export async function readBody<T>(req: Request, schema: z.ZodType<T, z.ZodTypeDef, unknown>): Promise<T> {
   let json: unknown;
   try {
     json = await req.json();

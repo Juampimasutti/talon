@@ -16,6 +16,8 @@ export const MODULES = [
   { key: "contabilidad", label: "Plan de cuentas", hint: "Cuentas para imputar", toggle: true },
   { key: "comprobantes", label: "Comprobantes", hint: "Tipos, letras y numeración", toggle: true },
   { key: "estacion", label: "Estación de servicio", hint: "Surtidores, tanques, turnos y flota", toggle: true },
+  { key: "constructora", label: "Constructora", hint: "Obras, certificados, costos y unidades", toggle: true },
+  { key: "inmobiliaria", label: "Inmobiliaria", hint: "Propiedades, contratos y liquidaciones", toggle: true },
   { key: "reparto", label: "Reparto", hint: "Camiones propios y entrega a granel", toggle: true },
   { key: "informes", label: "Informes", hint: "Ventas, IVA, caja, stock y rentabilidad", toggle: true },
   { key: "auditoria", label: "Auditoría", hint: "Quién hizo cada cosa", toggle: true },
@@ -203,6 +205,7 @@ export function can(permissions: Iterable<string>, moduleKey: string, action: st
 }
 
 export function moduleEnabled(enabled: readonly string[], moduleKey: string): boolean {
+  if (moduleKey === "contabilidad") return false; // No hay asientos automáticos todavía.
   if (moduleKey === "dashboard" || moduleKey === "configuracion") return true;
   return enabled.includes(moduleKey);
 }

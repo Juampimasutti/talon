@@ -1,3 +1,6 @@
+import { simplifyDemoPerceptions } from "./seed-demo-perceptions";
+import { seedConstructora } from "./seed-constructora";
+import { seedInmobiliaria } from "./seed-inmobiliaria";
 import { loadEnv } from "./load-env";
 import { seedStation } from "./seed-estacion";
 import { syncSystemRoles } from "./sync-roles";
@@ -44,6 +47,9 @@ async function main() {
     console.log("La empresa demo ya está cargada");
     await seedStation(sql);
     await syncSystemRoles(sql);
+    await seedInmobiliaria(sql);
+    await seedConstructora(sql);
+    await simplifyDemoPerceptions(sql);
     await sql.end();
     return;
   }
@@ -404,7 +410,7 @@ async function main() {
           return {
             companyId: dist.id,
             code: `C${String(index + 1).padStart(4, "0")}`,
-            name: `${comercios[index % comercios.length]} ${city} ${index + 1}`,
+            name: `${comercios[index % comercios.length]} ${city} ${index + 1}${index === 0 || index === 1 ? " · DEMO IIBB 3%" : ""}`,
             fantasyName: index % 3 === 0 ? `Sucursal ${index + 1}` : null,
             docType: taxCondition === "cf" ? "DNI" : "CUIT",
             cuit,
@@ -414,7 +420,7 @@ async function main() {
             priceListId: index % 4 === 0 ? mayorista.id : mostrador.id,
             discountBps: index % 5 === 0 ? 500 : 0,
             creditLimitCents: taxCondition === "cf" ? 0 : 250_000_00,
-            iibbPerceptionBps: taxCondition === "ri" && index % 2 === 0 ? 300 : null,
+            iibbPerceptionBps: index === 0 || index === 1 ? 300 : null,
             paymentTermsDays: 7,
             zone: city,
           };
@@ -593,6 +599,9 @@ async function main() {
 
   await seedStation(sql);
   await syncSystemRoles(sql);
+  await seedInmobiliaria(sql);
+  await seedConstructora(sql);
+  await simplifyDemoPerceptions(sql);
   await sql`analyze`;
   await sql.end();
   console.log("Seed listo. Entrá con laura@talon.demo / talon1234");

@@ -41,6 +41,7 @@ export type DraftLine = {
 export type DocumentDraft = {
   kind: DocumentKind;
   documentTypeId: string;
+  pointOfSale?: number;
   partyId: string;
   issuedOn: string;
   paymentMethod?: "contado" | "cuenta_corriente";
@@ -254,8 +255,18 @@ export async function createDocument(tx: Tx, ctx: { userId: string; companyId: s
     if (duplicated[0]) throw new HttpError(409, "Ese proveedor ya tiene una factura con ese número");
   }
 
-  const number = dtype.nextNumber;
-  await tx.update(documentTypes).set({ nextNumber: number + 1 }).where(eq(documentTypes.id, dtype.id));
+  const pointOfSale = input.pointOfSale ?? company.pointOfSale;
+  const registered = await tx.execute(sql`select 1 from company_points_of_sale where company_id=${ctx.companyId} and number=${pointOfSale}`);
+  if (!registered.length) throw new HttpError(400, "El punto de venta no está habilitado en esta empresa");
+  const [counter] = await tx.execute<{ number: number }>(sql`
+    insert into document_counters(company_id,document_type_id,point_of_sale,next_number)
+    values(${ctx.companyId},${dtype.id},${pointOfSale},${pointOfSale === company.pointOfSale ? dtype.nextNumber + 1 : 2})
+    on conflict(company_id,document_type_id,point_of_sale) do update
+    set next_number=greatest(document_counters.next_number,${pointOfSale === company.pointOfSale ? dtype.nextNumber : 1})+1
+    returning next_number-1 as number
+  `);
+  const number = counter.number;
+  if (pointOfSale === company.pointOfSale) await tx.update(documentTypes).set({ nextNumber: number + 1 }).where(eq(documentTypes.id, dtype.id));
 
   let caeStatus = dtype.electronic ? "pendiente" : "no_electronico";
   let cae: string | null = input.kind === "compra" ? input.cae?.trim() || null : null;
@@ -264,7 +275,7 @@ export async function createDocument(tx: Tx, ctx: { userId: string; companyId: s
   if (dtype.electronic && dtype.movesVat && letter && process.env.ARCA_MODE === "live") {
     const authorization = await getInvoicingPort().authorize({
       companyCuit: company.cuit,
-      pointOfSale: company.pointOfSale,
+      pointOfSale,
       afipCode: afipCodeFor(dtype.afipCodes, letter) ?? 0,
       letter,
       number,
@@ -287,7 +298,7 @@ export async function createDocument(tx: Tx, ctx: { userId: string; companyId: s
       kind: input.kind,
       documentTypeId: dtype.id,
       letter,
-      pointOfSale: company.pointOfSale,
+      pointOfSale,
       number,
       issuedOn: input.issuedOn,
       partyType: input.kind === "compra" ? "supplier" : "customer",
@@ -355,7 +366,7 @@ export async function createDocument(tx: Tx, ctx: { userId: string; companyId: s
     );
   }
 
-  const label = `${dtype.code} ${letter ?? ""} ${formatNumber(company.pointOfSale, number)}`.replace(/\s+/g, " ").trim();
+  const label = `${dtype.code} ${letter ?? ""} ${formatNumber(pointOfSale, number)}`.replace(/\s+/g, " ").trim();
 
   if (!input.skipStock && dtype.movesStock && dtype.stockFactor !== 0 && warehouse) {
     for (const line of prepared) {
@@ -418,7 +429,7 @@ export async function createDocument(tx: Tx, ctx: { userId: string; companyId: s
     label,
     letter,
     number,
-    pointOfSale: company.pointOfSale,
+    pointOfSale,
     totalCents: totals.totalCents,
     vatCents: totals.vatCents,
     priceMode,
@@ -607,6 +618,10 @@ export async function voidDocument(tx: Tx, ctx: { userId: string; companyId: str
     .where(and(eq(documents.id, id), eq(documents.companyId, ctx.companyId)))
     .for("update");
   if (!document) throw new HttpError(404, "No encontramos el comprobante");
+  const [estate] = await tx.execute<{ settled: boolean }>(sql`select estate_document_is_settled(${id}::uuid) as settled`);
+  const [construction] = await tx.execute<{ linked: boolean }>(sql`select construction_document_is_linked(${id}::uuid) as linked`);
+  if (construction.linked) throw new HttpError(409, "Este comprobante está vinculado a una obra; requiere reversión dentro del circuito de la obra");
+  if (estate.settled) throw new HttpError(409, "Este comprobante ya integra una liquidación al propietario; no puede anularse desde Ventas");
   if (document.status === "anulado") throw new HttpError(400, "Ese comprobante ya está anulado");
 
   const [company] = await tx.select().from(companies).where(eq(companies.id, ctx.companyId));

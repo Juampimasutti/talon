@@ -49,6 +49,7 @@ export function EditorScreen({ kind }: { kind: keyof typeof META }) {
   const debouncedParty = useDebounced(partyQuery);
   const [party, setParty] = useState<PartyHit | null>(null);
   const [typeId, setTypeId] = useState("");
+  const [chosenPoint, setPoint] = useState<number | null>(null);
   const [issuedOn, setIssuedOn] = useState(todayIso());
   const [payment, setPayment] = useState<"contado" | "cuenta_corriente">("cuenta_corriente");
   const [chosenWarehouseId, setWarehouseId] = useState("");
@@ -167,6 +168,7 @@ export function EditorScreen({ kind }: { kind: keyof typeof META }) {
       const created = await apiSend<{ id: string; label: string }>("/api/documentos", "POST", {
         kind,
         documentTypeId: selectedType.id,
+        pointOfSale: chosenPoint ?? me.data?.company.pointOfSale,
         partyId: party.id,
         issuedOn,
         paymentMethod,
@@ -288,6 +290,11 @@ export function EditorScreen({ kind }: { kind: keyof typeof META }) {
             ))}
           </select>
         </label>
+        {(catalog.data?.pointsOfSale?.length ?? 0) > 1 ? <label className="grid gap-1 text-sm">Punto de venta
+          <select className="h-9 rounded-lg border px-2" value={chosenPoint ?? me.data?.company.pointOfSale} onChange={(event) => setPoint(Number(event.target.value))}>
+            {catalog.data?.pointsOfSale?.map((point) => <option key={point} value={point}>{String(point).padStart(5, "0")}</option>)}
+          </select>
+        </label> : null}
         <label className="grid gap-1 text-sm">
           Fecha
           <Input type="date" value={issuedOn} onChange={(event) => setIssuedOn(event.target.value)} />

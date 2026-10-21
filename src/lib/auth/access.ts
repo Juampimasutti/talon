@@ -15,6 +15,8 @@ const SECTIONS: [string, string][] = [
   ["/comprobantes", "comprobantes"],
   ["/configuracion", "configuracion"],
   ["/estacion", "estacion"],
+  ["/constructora", "constructora"],
+  ["/inmobiliaria", "inmobiliaria"],
   ["/reparto", "reparto"],
   ["/informes", "informes"],
   ["/pedidos", "pedidos"],

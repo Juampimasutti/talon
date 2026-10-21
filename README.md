@@ -6,7 +6,7 @@ Demo persistente con escenarios ficticios: `npm run demo`. [Preparación, acceso
 
 Gestión comercial horizontal para Argentina. Sirve para una distribuidora, un comercio, un depósito o un estudio: cada empresa prende los módulos que usa. La interfaz está en español rioplatense.
 
-Hay dos empresas de prueba. **Distribuidora Paraná SRL** es responsable inscripto y usa ventas, compras, stock, pedidos, remitos y caja. **Costa & Asociados** es monotributo y solo factura servicios. Laura está en las dos y puede cambiar de empresa desde el menú.
+La demo incluye Distribuidora Paraná, Costa & Asociados, Estación Almafuerte, Inmobiliaria Demo y Constructora Demo. Laura puede cambiar entre ellas desde el menú. [Guía de empresas, inmobiliaria y constructora](docs/empresas-y-rubros.md).
 
 ## Por qué este stack
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import dynamic from "next/dynamic";
 import { useState } from "react";
 import { toast } from "sonner";
 import { ApiError, apiGet, apiSend, clearSessionCache } from "@/lib/api/client";
@@ -9,6 +10,8 @@ import { useMe } from "@/components/use-me";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+const CompanyManagement = dynamic(() => import("./company-management").then((module) => module.CompanyManagement));
 
 type Config = {
   company: {
@@ -34,6 +37,11 @@ type Config = {
 };
 
 export function ConfiguracionScreen() {
+  const me = useMe();
+  return me.data ? <CompanyConfiguration key={me.data.company.id} /> : <p className="p-4 text-sm">Cargando…</p>;
+}
+
+function CompanyConfiguration() {
   const me = useMe();
   const queryClient = useQueryClient();
   const config = useQuery({
@@ -122,7 +130,7 @@ export function ConfiguracionScreen() {
               Permitir caja en negativo
             </label>
             <div className="grid gap-2 sm:grid-cols-2">
-              {MODULES.filter((module) => module.toggle).map((module) => (
+              {MODULES.filter((module) => module.toggle && module.key !== "contabilidad").map((module) => (
                 <label key={module.key} className="flex items-start gap-2 rounded-lg border p-2 text-sm">
                   <input type="checkbox" checked={company.enabledModules.includes(module.key)} disabled={!editable} onChange={() => toggleModule(module.key)} />
                   <span>
@@ -134,6 +142,7 @@ export function ConfiguracionScreen() {
             </div>
             {editable ? <Button type="submit">Guardar empresa</Button> : <p className="text-sm text-muted-foreground">Estás en modo lectura.</p>}
           </form>
+          <CompanyManagement />
         </TabsContent>
         <TabsContent value="campos">
           <ul className="mt-4 divide-y rounded-xl border bg-card">
@@ -256,7 +265,7 @@ export function ConfiguracionScreen() {
                   </tr>
                 </thead>
                 <tbody>
-                  {MODULES.map((module) => (
+                  {MODULES.filter((module) => module.key !== "contabilidad" && (!module.toggle || company.enabledModules.includes(module.key))).map((module) => (
                     <tr key={module.key} className="border-t">
                       <td className="p-2">{module.label}</td>
                       {ACTIONS.map((action) => {

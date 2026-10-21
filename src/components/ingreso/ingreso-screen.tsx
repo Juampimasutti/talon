@@ -1,9 +1,10 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { ApiError, apiSend, primeSession, type Me } from "@/lib/api/client";
+import { clearSessionCache, ApiError, apiSend, primeSession, type Me } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,6 +21,7 @@ const DEMO = [
 
 export function IngresoScreen() {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [pending, setPending] = useState(false);
 
@@ -42,8 +44,10 @@ export function IngresoScreen() {
     if (!email || !password) { toast.error("Completá el mail y la clave"); return; }
     setPending(true);
     try {
-      const me = await apiSend<Me>("/api/auth/login", "POST", { email, password });
+      const me = await apiSend<Me | { backupOnly: true } | { companySetupOnly: true }>("/api/auth/login", "POST", { email, password });
       queryClient.clear();
+      if ("companySetupOnly" in me) { clearSessionCache(); router.push("/alta-empresa"); return; }
+      if ("backupOnly" in me) { clearSessionCache(); router.push("/respaldos"); return; }
       primeSession(me);
       queryClient.setQueryData(["me"], me);
       window.location.assign("/tablero");

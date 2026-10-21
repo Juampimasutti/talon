@@ -18,7 +18,8 @@
     "local": "tsx scripts/local.ts",
     "demo:setup": "tsx scripts/demo-fija.ts",
     "demo": "tsx scripts/demo-fija.ts --serve",
-    "local:prod": "next build && node scripts/shell-assets.mjs && next start --hostname 0.0.0.0 --port 4318"
+    "local:prod": "next build && node scripts/shell-assets.mjs && next start --hostname 0.0.0.0 --port 4318",
+    "empresa:autorizar": "tsx scripts/company-operator.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

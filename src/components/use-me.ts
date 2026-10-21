@@ -20,6 +20,7 @@ export function useCachedMe(): Me | null {
 }
 
 export type Catalog = {
+  pointsOfSale?: number[];
   priceLists: { id: string; name: string; isDefault: boolean }[];
   warehouses: { id: string; name: string; isDefault: boolean }[];
   documentTypes: {

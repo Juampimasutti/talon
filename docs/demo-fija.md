@@ -79,3 +79,9 @@ docker compose exec -T db pg_dump -U talon_admin -Fc talon_demo_fija > talon-dem
 ```
 
 No subir el dump al repositorio si posteriormente contiene información real.
+
+## Ampliación del 21/10/2026
+
+La demo incorpora Inmobiliaria Demo y Constructora Demo. Las cantidades de registros
+indicadas más arriba corresponden a la entrega inicial: cambian al operar y probar.
+Ver [guía de empresas y rubros](empresas-y-rubros.md) y [verificación](verificacion-empresas-rubros.md).

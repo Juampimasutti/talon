@@ -41,6 +41,7 @@ async function main() {
   const connection = postgres(process.env.DATABASE_URL_ADMIN, { max: 1 });
   const db = drizzle(connection, { schema });
   try {
+    await connection`insert into company_operators(user_id,scope) select id,'estudio' from users where email='laura@talon.demo' on conflict do nothing`;
     await db.transaction(async (tx) => {
       // Serializes two setup commands; the fixture and its marker commit together.
       await tx.execute(query`select pg_advisory_xact_lock(260021)`);

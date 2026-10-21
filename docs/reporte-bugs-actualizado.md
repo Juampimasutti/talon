@@ -65,3 +65,11 @@ Las pruebas usan exclusivamente la demo local. Se conservan registros de QA en e
 El manifiesto `verificacion-archivos-diseno.json` conserva la comparación histórica anterior al arreglo de bugs. Ya no corresponde afirmar que sus 95 archivos son idénticos: en esta fase se modificaron explícitamente lógica de selección de sesión, reconstrucción de filas offline y tests. Otros cambios en archivos protegidos son nombres locales para lint, imports sin uso y la fuente del provisorio.
 
 `verificacion-correcciones-codex.json` registra los archivos actuales, hashes y diferencias respecto de la entrega visual. No cambiaron package.json, package-lock.json, migraciones, esquema de datos, cálculos fiscales, stock ni reglas de permisos. Los cambios de permisos.ts y sus tests son solo nombres locales de variables. La altura de fila virtual sigue en 46 px.
+
+## Verificación adicional · 21/10/2026
+
+Se reprodujo y corrigió la pérdida de permisos personalizados al repetir el seed:
+los puestos editados se marcan como personalizados. Prueba de regresión incluida.
+Las cinco comprobaciones offline históricas se repitieron en producción local.
+El alcance, evidencia y pendientes de empresas y rubros están en
+[el informe de verificación](verificacion-empresas-rubros.md).
