@@ -62,6 +62,7 @@ export function BackupScreen() {
         Descargá una copia completa y guardala también fuera de esta
         computadora. Una copia en el mismo disco no protege ante su pérdida.
       </p>
+      <p className="text-sm text-muted-foreground">Se conservan las últimas 14 copias automáticas por empresa. Las manuales y las anteriores a vaciar, eliminar o recuperar se mantienen. Las automáticas se generan con el servidor de Talón encendido; para hacerlas con la aplicación cerrada, configurá la tarea de Windows indicada en la guía de respaldos.</p>
       {capabilities.data?.canDestroy && current ? (
         <section className="grid gap-2 rounded border bg-card p-3">
           <strong>{current.name}</strong>

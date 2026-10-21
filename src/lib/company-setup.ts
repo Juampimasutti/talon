@@ -106,7 +106,7 @@ export const createCompanySchema = z.object({
       (points) => new Set(points).size === points.length,
       "Hay puntos de venta repetidos",
     ),
-  enabledModules: z.array(z.string()).max(32),
+  enabledModules: z.array(z.string()).min(1, "Seleccioná al menos un módulo para la empresa").max(32),
   basicLedger: z.boolean().default(false),
 });
 export type CreateCompanyInput = z.infer<typeof createCompanySchema>;

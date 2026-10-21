@@ -121,6 +121,7 @@ export function EditorScreen({ kind }: { kind: keyof typeof META }) {
   const [creatingParty, setCreatingParty] = useState(false);
   const [activePartyIndex, setActivePartyIndex] = useState(-1);
   const [invalidField, setInvalidField] = useState("");
+  const [moreOptions, setMoreOptions] = useState(false);
   const skuRef = useRef<HTMLInputElement>(null);
   const [partyQuery, setPartyQuery] = useState("");
   const debouncedParty = useDebounced(partyQuery);
@@ -353,9 +354,10 @@ export function EditorScreen({ kind }: { kind: keyof typeof META }) {
       return;
     }
     const invalid = (field: string, message: string) => {
+      if (field === "document-taxes" || field === "document-perception") setMoreOptions(true);
       setInvalidField(field);
       setFormError(message);
-      document.getElementById(field)?.focus();
+      requestAnimationFrame(() => document.getElementById(field)?.focus());
     };
     for (const [index, line] of lines.entries()) {
       const quantity = parseLocaleNumber(line.quantity),
@@ -647,11 +649,14 @@ export function EditorScreen({ kind }: { kind: keyof typeof META }) {
 
   return (
     <div className="grid gap-4 p-4 md:p-6">
-      <div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
         <h1 className="text-4xl tracking-tight">{meta.title}</h1>
         <p className="text-sm text-muted-foreground">
           F2 busca artículo · Enter en el código lo agrega · Ctrl+Enter emite
         </p>
+        </div>
+        <a href="#document-total" className="rounded border bg-card px-3 py-2 text-right text-sm focus-visible:outline-2 focus-visible:outline-primary"><span className="block text-muted-foreground">Revisar total · {lines.length} {lines.length === 1 ? "renglón" : "renglones"}</span><strong className="text-lg tabular-nums">{formatMoney(totals.totalCents)}</strong></a>
       </div>
       {creatingParty ? (
         <PartyCreateDialog
@@ -1025,30 +1030,42 @@ export function EditorScreen({ kind }: { kind: keyof typeof META }) {
 
       <div className="grid items-start gap-4 md:grid-cols-[1fr_280px]">
         <div className="grid content-start gap-3">
-          {selectedType?.movesVat || kind === "pedido" || kind === "remito" ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="grid gap-1 text-sm">
-                Percepción IIBB %
-                <Input
-                  id="document-perception"
-                  aria-invalid={invalidField === "document-perception"}
-                  value={perception}
-                  onChange={(event) => setPerception(event.target.value)}
-                  placeholder="0"
-                />
-              </label>
-              <label className="grid gap-1 text-sm">
-                Otros tributos
-                <Input
-                  id="document-taxes"
-                  aria-invalid={invalidField === "document-taxes"}
-                  value={otherTaxes}
-                  onChange={(event) => setOtherTaxes(event.target.value)}
-                  placeholder="0,00"
-                />
-              </label>
+          <details open={moreOptions} onToggle={(event) => setMoreOptions(event.currentTarget.open)} className="rounded border bg-card p-3">
+            <summary className="cursor-pointer text-sm font-medium">Más opciones · impuestos y notas{perception || otherTaxes || notes ? " (con datos)" : ""}</summary>
+            <div className="mt-3 grid gap-3">
+              {selectedType?.movesVat || kind === "pedido" || kind === "remito" ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="grid gap-1 text-sm">
+                    Percepción IIBB %
+                    <Input
+                      id="document-perception"
+                      aria-invalid={invalidField === "document-perception"}
+                      value={perception}
+                      onChange={(event) => setPerception(event.target.value)}
+                      placeholder="0"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    Otros tributos
+                    <Input
+                      id="document-taxes"
+                      aria-invalid={invalidField === "document-taxes"}
+                      value={otherTaxes}
+                      onChange={(event) => setOtherTaxes(event.target.value)}
+                      placeholder="0,00"
+                    />
+                  </label>
+                </div>
+              ) : null}
+              <textarea
+                className="min-h-20 rounded-lg border px-3 py-2 text-sm"
+                aria-label="Notas internas"
+                placeholder="Notas internas"
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+              />
             </div>
-          ) : null}
+          </details>
           {kind === "compra" ? (
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="grid gap-1 text-sm">
@@ -1081,14 +1098,8 @@ export function EditorScreen({ kind }: { kind: keyof typeof META }) {
               </label>
             </div>
           ) : null}
-          <textarea
-            className="min-h-20 rounded-lg border px-3 py-2 text-sm"
-            placeholder="Notas internas"
-            value={notes}
-            onChange={(event) => setNotes(event.target.value)}
-          />
         </div>
-        <aside className="rounded-xl border bg-card p-4">
+        <aside id="document-total" className="scroll-mt-4 rounded border bg-card p-4">
           <Total label="Neto gravado" value={totals.netTaxedCents} />
           {totals.vatBreakdown.map((slice) => (
             <Total

@@ -37,6 +37,7 @@ export function normalizePlate(value: string): string {
 
 export function constraintMessage(code: string, detail: string): string | null {
   const text = detail.toLowerCase();
+  if (code === "23505" && text.includes("companies_cuit")) return "Ya existe una empresa con ese CUIT";
   if (code === "23505" && text.includes("ledger_accounts")) return "Ya existe una cuenta con ese código";
   if (code === "23505" && text.includes("fuel_trucks")) return "Ya hay un camión con esa patente";
   if (code === "23505" && text.includes("fuel_pumps")) return "Ya hay un surtidor con ese número";

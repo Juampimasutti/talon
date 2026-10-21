@@ -1,4 +1,4 @@
-import { mkdir, access, writeFile, rename } from "node:fs/promises";
+import { mkdir, access, writeFile, rename, rm } from "node:fs/promises";
 import { resolve, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import postgres from "postgres";
@@ -14,6 +14,9 @@ export async function backupOnce() {
   await mkdir(folder, { recursive: true, mode: 0o700 });
   const sql = postgres(url.toString(), { max: 1, onnotice: () => {} });
   try {
+    // Un único trabajador por base, incluso si coinciden el servidor y Windows.
+    const [gate] = await sql`select pg_try_advisory_lock(260028, 14) as acquired`;
+    if (!gate.acquired) return { folder, written: 0 };
     const companies =
       await sql`select c.id,(select m.user_id from memberships m join roles r on r.id=m.role_id join users u on u.id=m.user_id where m.company_id=c.id and m.active and u.active and r.company_id=c.id and r.key='admin' order by m.user_id limit 1) as actor_id from companies c`;
     for (const company of companies) {
@@ -46,6 +49,21 @@ export async function backupOnce() {
       });
       await rename(temporary, file);
       written++;
+    }
+    // Retener sólo las últimas 14 automáticas por empresa. Las manuales y las
+    // previas a vaciar/eliminar/recuperar nunca se purgan automáticamente.
+    const expired = await sql`
+      select id,target_id from (
+        select id,target_id,row_number() over(partition by target_id order by created_at desc,id desc) as position
+        from company_lifecycle_events where action='automatico' and backup is not null
+      ) ranked where position>14`;
+    for (const event of expired) {
+      await sql.begin(async (tx) => {
+        await tx`select pg_advisory_xact_lock(hashtextextended(${event.target_id}::text,260026))`;
+        // Mantener el evento de auditoría, retirar sólo su copia vencida.
+        await rm(join(folder, `talon-${event.id}.json`), { force: true });
+        await tx`update company_lifecycle_events set backup=null where id=${event.id} and action='automatico'`;
+      });
     }
     if (written)
       console.log(`Respaldos: ${written} copias guardadas en ${folder}`);

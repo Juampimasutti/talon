@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { apiGet } from "@/lib/api/client";
 import { showsAccountCard } from "@/lib/auth/access";
-import { can } from "@/lib/auth/permissions";
+import { can, moduleEnabled } from "@/lib/auth/permissions";
 import { balancePhrase, formatDate, formatMoney, formatNumber, formatQty } from "@/lib/format";
 import { useMe } from "@/components/use-me";
 import { ScreenFallback } from "@/components/screen-fallback";
@@ -46,17 +46,18 @@ export function TableroScreen() {
     queryFn: () => apiGet<Dashboard>("/api/tablero"),
   });
 
-  if (!me.data || board.isLoading || !board.data) return <ScreenFallback label="Armando el tablero" />;
   if (board.isError) return <p className="p-6 text-sm">No pude cargar el tablero. Probá de nuevo en un rato.</p>;
+  if (!me.data || board.isLoading || !board.data) return <ScreenFallback label="Armando el tablero" />;
 
   const perms = me.data.permissions;
+  const mayCreate = (module: string) => moduleEnabled(me.data.company.modules, module) && can(perms, module, "ver") && can(perms, module, "crear");
   const cards = [
-    board.data.ventasMesCents != null ? ["Ventas del mes", formatMoney(board.data.ventasMesCents)] : null,
-    board.data.comprasMesCents != null ? ["Compras del mes", formatMoney(board.data.comprasMesCents)] : null,
-    board.data.cajaCents != null ? ["Saldo de caja", formatMoney(board.data.cajaCents)] : null,
-    showsAccountCard(perms, "clientes") && board.data.deudoresCents != null ? ["Clientes", balancePhrase("cliente", board.data.deudoresCents)] : null,
-    showsAccountCard(perms, "proveedores") && board.data.acreedoresCents != null ? ["Proveedores", balancePhrase("proveedor", board.data.acreedoresCents)] : null,
-  ].filter((item): item is [string, string] => Boolean(item));
+    board.data.ventasMesCents != null ? ["Ventas del mes", formatMoney(board.data.ventasMesCents), "/ventas"] : null,
+    board.data.comprasMesCents != null ? ["Compras del mes", formatMoney(board.data.comprasMesCents), "/compras"] : null,
+    board.data.cajaCents != null ? ["Saldo de caja", formatMoney(board.data.cajaCents), "/caja"] : null,
+    showsAccountCard(perms, "clientes") && board.data.deudoresCents != null ? ["Clientes", balancePhrase("cliente", board.data.deudoresCents), "/clientes"] : null,
+    showsAccountCard(perms, "proveedores") && board.data.acreedoresCents != null ? ["Proveedores", balancePhrase("proveedor", board.data.acreedoresCents), "/proveedores"] : null,
+  ].filter((item): item is [string, string, string] => Boolean(item));
   const seeDocuments = ["ventas", "compras", "pedidos", "remitos"].some((module) => can(perms, module, "ver"));
 
   return (
@@ -68,18 +69,22 @@ export function TableroScreen() {
             {[me.data.company.city, me.data.company.name].filter(Boolean).join(" · ")}
           </p>
         </div>
-        {can(perms, "ventas", "crear") ? (
+        <div className="flex flex-wrap gap-2">
+        {mayCreate("cuentas_corrientes") && mayCreate("caja") ? <Link href="/cuentas" className="inline-flex h-8 items-center rounded border bg-card px-3 text-sm font-medium hover:bg-accent">Cobrar / pagar</Link> : null}
+        {mayCreate("caja") ? <Link href="/caja" className="inline-flex h-8 items-center rounded border bg-card px-3 text-sm font-medium hover:bg-accent">Registrar movimiento</Link> : null}
+        {mayCreate("ventas") ? (
           <Link href="/ventas/nueva" className="inline-flex h-8 items-center gap-2 rounded-lg border border-primary bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
             <span aria-hidden="true">+</span> Nueva venta
           </Link>
         ) : null}
+        </div>
       </header>
       <section aria-label="Resumen de saldos" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        {cards.map(([label, value]) => (
-          <article key={label} className="talon-metric">
+        {cards.map(([label, value, href]) => (
+          <Link key={label} href={href} className="talon-metric transition-colors hover:border-primary focus-visible:outline-2 focus-visible:outline-primary" aria-label={`${label}: ${value}. Abrir sección`}>
             <p className="text-xs font-semibold text-muted-foreground">{label}</p>
             <p className={label === "Clientes" || label === "Proveedores" ? "talon-metric-value talon-metric-balance" : "talon-metric-value"}>{value}</p>
-          </article>
+          </Link>
         ))}
       </section>
       {seeDocuments ? (

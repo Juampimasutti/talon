@@ -448,13 +448,20 @@ describe.skipIf(!enabled)(
       };
       // Sólo el fixture concede el permiso global: ser admin de un tenant no alcanza.
       const { buildCuit } = await import("../fiscal/cuit");
-      input.cuit = buildCuit("30", "71458901");
+      input.cuit = buildCuit("30", "67458901");
       expect((await request("empresas/capacidades")).canCreate).toBe(false);
       await request("empresas", input, 403);
       await sql!`insert into company_operators(user_id,scope) select id,'estudio' from users where email='laura@talon.demo'`;
       await request("empresas", { ...input, cuit: "123" }, 400);
       await request("empresas", { ...input, pointsOfSale: [1, 1] }, 400);
-      const created = await request("empresas", input);
+      await request("empresas", { ...input, enabledModules: [] }, 400);
+      const attempts=await Promise.all([0,1].map(()=>fetch(`${base}/api/empresas`, {
+        method:"POST", headers:{"Content-Type":"application/json",Cookie:cookie},body:JSON.stringify(input)
+      })));
+      expect(attempts.map(r=>r.status).sort()).toEqual([200,409]);
+      const created=(await attempts.find(r=>r.status===200)!.json()).data;
+      await request("auth/empresa",{companyId:created.id});
+      await request("empresas", { ...input, cuit: input.cuit.replaceAll("-", "") }, 409);
       const me = await request("auth/me");
       expect(me.company.id).toBe(created.id);
       expect(me.role.key).toBe("admin");
@@ -1384,6 +1391,36 @@ describe.skipIf(!enabled)(
       });
       await request("auth/empresa", { companyId });
     }, 30_000);
+    it("protege CUIT sin eliminar duplicados históricos y permite recuperar su identidad", async () => {
+      const { readFileSync } = await import("node:fs");
+      const legacyId=randomUUID();
+      const rollback=new Error("QA: revertir escenario histórico");
+      try {
+        await sql!.begin(async tx=>{
+          await tx`drop trigger companies_cuit_guard on companies`;
+          await tx`drop function company_cuit_guard()`;
+          await tx`drop index if exists companies_cuit_unique`;
+          await tx`drop table company_legacy_cuits`;
+          const [source]=await tx`select to_jsonb(c) as data from companies c where id=${companyId}`;
+          const historical={...source.data,id:legacyId,slug:`legacy-${legacyId}`};
+          await tx`insert into companies select (jsonb_populate_record(null::companies,${JSON.stringify(historical)}::text::jsonb)).*`;
+          await tx.unsafe(readFileSync("drizzle/0028_company_validation.sql","utf8"));
+          const [count]=await tx`select count(*)::int as n from companies where cuit=${source.data.cuit}`;
+          expect(count.n).toBe(2);
+          const attempted={...historical,id:randomUUID(),slug:`new-${randomUUID()}`};
+          await expect(tx.savepoint(async nested=>{
+            await nested`insert into companies select (jsonb_populate_record(null::companies,${JSON.stringify(attempted)}::text::jsonb)).*`;
+          })).rejects.toMatchObject({code:"23505"});
+          await tx`update companies set cuit='99-12345678-0' where id=${legacyId}`;
+          await expect(tx.savepoint(async nested=>{
+            await nested`update companies set cuit=${source.data.cuit} where id=${legacyId}`;
+          })).rejects.toMatchObject({code:"23505"});
+          await tx`delete from companies where id=${legacyId}`;
+          await tx`insert into companies select (jsonb_populate_record(null::companies,${JSON.stringify(historical)}::text::jsonb)).*`;
+          throw rollback;
+        });
+      } catch(error) { if(error!==rollback) throw error; }
+    });
     it("respaldos manuales y automáticos: recuperar sin reutilizar números ni reactivar colaboradores", async () => {
       const { buildCuit } = await import("../fiscal/cuit");
       const created = await request("empresas", {
@@ -1526,6 +1563,19 @@ describe.skipIf(!enabled)(
         expect(downloaded.company.id).toBe(created.id);
         expect(downloaded.documents).toHaveLength(2);
         expect(downloaded).not.toHaveProperty("users");
+        // Vencer sólo automáticas: ni manuales ni evidencia de auditoría.
+        await sql!`insert into company_lifecycle_events(target_id,target_name,actor_id,action,backup,created_at)
+          select e.target_id,e.target_name,e.actor_id,'automatico',e.backup,now()-make_interval(days=>n)
+          from company_lifecycle_events e cross join generate_series(1,20) n where e.id=${events[0].id}`;
+        execFileSync(process.execPath, ["scripts/backup-worker.mjs", "--once"], { env, stdio: "pipe", timeout: 20000 });
+        const retained=await sql!`select id,backup is not null as retained from company_lifecycle_events where target_id=${created.id} and action='automatico' order by created_at desc,id desc`;
+        expect(retained).toHaveLength(21);
+        expect(retained.filter(e=>e.retained)).toHaveLength(14);
+        const remainingFiles=readdirSync(join(directory,database));
+        for(const event of retained) expect(remainingFiles.includes(`talon-${event.id}.json`)).toBe(event.retained);
+        const [manual]=await sql!`select backup is not null as retained from company_lifecycle_events where id=${saved.backupId}`;
+        expect(manual.retained).toBe(true);
+
       } finally {
         rmSync(directory, { recursive: true, force: true });
       }

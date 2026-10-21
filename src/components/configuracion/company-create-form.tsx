@@ -61,7 +61,9 @@ export function CompanyCreateForm() {
           queryClient.clear();
           primeSession(next);
           queryClient.setQueryData(["me"], next);
-          router.push("/configuracion");
+          toast.success(`Empresa «${next.company.name}» creada. Ahora estás trabajando en ella.`, { duration: 8000 });
+          router.push("/tablero");
+          router.refresh();
         } catch (error) {
           toast.error(
             error instanceof Error
@@ -74,6 +76,7 @@ export function CompanyCreateForm() {
       }}
     >
       <h3 className="font-semibold">Nueva empresa</h3>
+      <p className="text-sm text-muted-foreground">Al crearla, pasarás a trabajar en la nueva empresa. Podés volver a la anterior desde el selector del menú.</p>
       <label className="grid gap-1 text-sm">
         Rubro
         <select

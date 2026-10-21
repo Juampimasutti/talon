@@ -25,7 +25,6 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
 import { ApiError, apiSend, clearSessionCache, type Me } from "@/lib/api/client";
 import { sectionAccess } from "@/lib/auth/access";
 import { visibleModules } from "@/lib/auth/permissions";
@@ -112,16 +111,10 @@ export function PanelShell({ children }: { children: React.ReactNode }) {
   }, [queryClient]);
 
   const access = session && pathname !== "/tablero" ? sectionAccess(pathname, session.permissions, session.company.modules) : "allow";
-  useEffect(() => {
-    if (access !== "deny" && access !== "module-off") return;
-    const message = access === "module-off" ? "Ese módulo está desactivado" : "No tenés acceso a esa sección";
-    toast.error(message);
-    router.replace("/tablero");
-  }, [access, router]);
 
   if (!session) return <ScreenFallback label="Abriendo la empresa" />;
   if (access === "deny" || access === "module-off") {
-    return <p className="p-6 text-sm">{access === "module-off" ? "Ese módulo está desactivado" : "No tenés acceso a esa sección"}</p>;
+    return <main className="mx-auto max-w-lg p-6"><h1 className="text-lg font-semibold">{access === "module-off" ? "Módulo no activo" : "Sin permiso"}</h1><p className="mt-2 text-sm text-muted-foreground">{access === "module-off" ? "Esta sección no está habilitada en la empresa seleccionada." : "Tu puesto no tiene acceso a esta sección. Consultá con la administración."}</p><Link className="mt-4 inline-block text-sm text-primary underline" href="/tablero">Volver al tablero</Link></main>;
   }
   const data = session;
   const items = visibleModules(data.company.modules, data.permissions);

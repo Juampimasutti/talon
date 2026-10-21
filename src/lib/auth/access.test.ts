@@ -71,6 +71,15 @@ describe("matriz de puestos", () => {
     expect(ownTrucks(trucks, trips, "oscar", false)).toHaveLength(3);
   });
 
+  it("bloquea las secciones del reporte para vendedor y módulos apagados", () => {
+    for (const path of ["/auditoria", "/configuracion", "/inmobiliaria", "/constructora"]) {
+      expect(sectionAccess(path, ROLE_TEMPLATES.vendedor.permissions, [...MODULES,"inmobiliaria","constructora"])).toBe("deny");
+    }
+    expect(sectionAccess("/contabilidad",ROLE_TEMPLATES.vendedor.permissions,MODULES)).toBe("module-off");
+    expect(sectionAccess("/inmobiliaria",ROLE_TEMPLATES.admin.permissions,["ventas"])).toBe("module-off");
+    expect(sectionAccess("/constructora",ROLE_TEMPLATES.admin.permissions,["ventas"])).toBe("module-off");
+  });
+
   it("un módulo apagado no es un 404", () => {
     expect(sectionAccess("/remitos", ROLE_TEMPLATES.admin.permissions, ["ventas"])).toBe("module-off");
   });
