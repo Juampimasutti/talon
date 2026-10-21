@@ -253,10 +253,10 @@ function UserBlock({
   return (
     <div className="grid gap-2 px-1 pb-2 text-sm">
       {data.companies.length > 1 ? (
-        <label className="grid gap-1 text-xs text-sidebar-foreground/70">
+        <label className="grid min-w-0 gap-1 text-xs text-sidebar-foreground/70">
           Empresa
           <select
-            className="h-8 rounded-md border border-sidebar-border bg-sidebar px-2 text-sm text-sidebar-foreground"
+            className="h-8 w-full min-w-0 max-w-full rounded-md border border-sidebar-border bg-sidebar px-2 text-sm text-sidebar-foreground"
             value={data.company.id}
             onChange={(event) => onCompany(event.target.value)}
           >

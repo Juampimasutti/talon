@@ -41,6 +41,75 @@ export async function companyManagement(
     await switchCompany(created.id);
     return ok(created);
   }
+  if (method === "POST" && id === "respaldos" && !action) {
+    const body = await readBody(
+      req,
+      z.object({
+        companyId: z.string().uuid(),
+        kind: z.enum(["manual", "automatico"]).default("manual"),
+      }),
+    );
+    const auth = await getAuth();
+    if (!auth || auth.company.companyId !== body.companyId)
+      throw new HttpError(403, "Seleccioná la empresa que querés respaldar");
+    const [row] = await getDb().execute<{ backupId: string }>(
+      sql`select company_backup_create(${hash},${body.companyId}::uuid,${body.kind})::text as "backupId"`,
+    );
+    return ok({
+      backupId: row.backupId,
+      downloadUrl: `/api/empresas/respaldos/${row.backupId}`,
+    });
+  }
+  if (
+    method === "POST" &&
+    id === "respaldos" &&
+    action &&
+    path[3] === "restaurar"
+  ) {
+    const parsedId = z.string().uuid().safeParse(action);
+    if (!parsedId.success) throw new HttpError(400, "Respaldo inválido");
+    const backupId = parsedId.data;
+    const body = await readBody(
+      req,
+      z.object({ confirmation: z.string().min(1).max(120) }),
+    );
+    const [source] = await getDb().execute<{
+      backup: {
+        schemaMigrations: string[];
+        company: { id: string; name: string };
+      } | null;
+    }>(
+      sql`select company_backup_download(${hash},${backupId}::uuid) as backup`,
+    );
+    if (!source.backup) throw new HttpError(404, "No encontramos el respaldo");
+    const [available] = await getDb().execute<{
+      backups: { id: string; restoreName: string; canRestore: boolean }[];
+    }>(sql`select company_backups(${hash}) as backups`);
+    const metadata = available.backups.find((b) => b.id === backupId);
+    if (!metadata?.canRestore)
+      throw new HttpError(
+        403,
+        "Sólo el administrador actual puede recuperar esta empresa",
+      );
+    if (body.confirmation !== metadata.restoreName)
+      throw new HttpError(400, "Escribí el nombre exacto de la empresa");
+    const migrations = await getDb().execute<{ id: string }>(
+      sql`select id from schema_migrations order by id`,
+    );
+    if (
+      JSON.stringify(source.backup.schemaMigrations) !==
+      JSON.stringify(migrations.map((m) => m.id))
+    )
+      throw new HttpError(
+        409,
+        "Este respaldo es de otra versión. Requiere una recuperación técnica; no se modificaron los datos.",
+      );
+    const [restored] = await getDb().execute<{ companyId: string }>(
+      sql`select company_backup_restore(${hash},${backupId}::uuid,${body.confirmation})::text as "companyId"`,
+    );
+    await switchCompany(restored.companyId);
+    return ok({ ...restored, userId: valid.actor });
+  }
   if (method === "GET" && id === "respaldos" && !action) {
     const [row] = await getDb().execute<{ backups: unknown }>(
       sql`select company_backups(${hash}) as backups`,

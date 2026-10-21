@@ -57,7 +57,7 @@ export function OfflineBanner() {
       const onlineNow = await probeServer();
       if (stop) return;
       setOnline(browserOnline() && onlineNow);
-      if (onlineNow) await cacheReference().catch(() => undefined);
+      if (onlineNow) await cacheReference(true).catch(() => undefined);
       await counts();
     }
     void boot();

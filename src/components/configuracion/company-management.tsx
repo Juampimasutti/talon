@@ -36,7 +36,7 @@ export function CompanyManagement() {
     <section className="mt-5 grid gap-3 border-t pt-4">
       <h2 className="font-semibold">Administración de empresas</h2>
       <a className="text-sm text-primary underline" href="/respaldos">
-        Mis respaldos de vaciado y eliminación
+        Respaldos y recuperación de empresas
       </a>
       {capabilities.data.canCreate ? (
         <Button

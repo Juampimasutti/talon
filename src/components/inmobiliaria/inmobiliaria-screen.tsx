@@ -1,4 +1,5 @@
 "use client";
+import dynamic from "next/dynamic";
 import { EntryForm, type Field } from "@/components/business-entry-form";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -17,6 +18,7 @@ import { useDebounced } from "@/components/use-debounced";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
+const BusinessReversalPanel=dynamic(()=>import("@/components/business-reversal-panel").then(m=>m.BusinessReversalPanel));
 type Row = Record<string, string | number | null>;
 const tabs = {
   resumen: "Resumen",
@@ -449,6 +451,7 @@ export function InmobiliariaScreen() {
   }
   return (
     <main className="grid gap-4 p-4 md:p-6">
+      {me.data && can(me.data.permissions,"inmobiliaria","anular") ? <BusinessReversalPanel sector="inmobiliaria" /> : null}
       <div>
         <h1 className="text-2xl font-semibold">Inmobiliaria</h1>
         <p className="text-sm text-muted-foreground">

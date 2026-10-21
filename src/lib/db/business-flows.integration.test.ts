@@ -60,6 +60,48 @@ async function request(path: string, body?: unknown, expected = 200) {
   return result.data;
 }
 
+async function reverseOperation(sector: string, resource: string, id: string) {
+  const path = `reversiones/${sector}/${resource}/${id}`;
+  const preview = await request(path);
+  const before = await sql!`select count(*)::int as n from business_reversals`;
+  await request(
+    path,
+    {
+      reason: "Corrección QA",
+      confirmation: "ANULAR",
+      fingerprint: "0".repeat(64),
+    },
+    409,
+  );
+  const after = await sql!`select count(*)::int as n from business_reversals`;
+  expect(after).toEqual(before);
+  const responses = await Promise.all(
+    [0, 1].map(() =>
+      fetch(`${base}/api/${path}`, {
+        method: "POST",
+        headers: { Cookie: cookie, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reason: "Corrección QA",
+          confirmation: "ANULAR",
+          fingerprint: preview.fingerprint,
+        }),
+      }),
+    ),
+  );
+  expect(responses.map((r) => r.status).sort()).toEqual([200, 404]);
+  const result = await responses.find((r) => r.status === 200)!.json();
+  await request(
+    path,
+    {
+      reason: "Reintento QA",
+      confirmation: "ANULAR",
+      fingerprint: preview.fingerprint,
+    },
+    404,
+  );
+  return result.data;
+}
+
 async function balances() {
   const [row] = await sql!`
     select
@@ -724,6 +766,17 @@ describe.skipIf(!enabled)(
         owner: 0,
         supplier: 0,
       });
+      const [spent] =
+        await sql!`insert into cash_movements(company_id,cash_account_id,direction,amount_cents,description,occurred_on) values(${created.id},${cashId},'out',1210000,'Fixture QA para validar reversión sin saldo','2026-01-11') returning id`;
+      await request(
+        `reversiones/inmobiliaria/cobros/${receipt.id}`,
+        undefined,
+        409,
+      );
+      expect((await request(`documentos/${receipt.documentId}`)).status).toBe(
+        "confirmado",
+      );
+      await sql!`delete from cash_movements where id=${spent.id}`;
       await request(`inmobiliaria/contratos/${contract.id}/ajustar`, {
         effectiveOn: "2026-04-01",
         source: "Ajuste fijo pactado",
@@ -778,6 +831,37 @@ describe.skipIf(!enabled)(
         confirmation: "Inmobiliaria QA",
       });
       await verifyBackupRestore(snapshot);
+      await request(`empresas/respaldos/${wipe.backupId}/restaurar`, {
+        confirmation: "Inmobiliaria QA",
+      });
+      const [beforePreview] =
+        await sql!`select count(*)::int as n from documents where company_id=${created.id} and status='anulado'`;
+      const effect = await reverseOperation(
+        "inmobiliaria",
+        "cobros",
+        receipt.id,
+      );
+      expect(effect).toMatchObject({
+        documentCount: 2,
+        cashDeltaCents: -1210000,
+        operationCount: 2,
+      });
+      const [reversed] =
+        await sql!`select (select coalesce(sum(case when direction='in' then amount_cents else -amount_cents end),0)::int from cash_movements where company_id=${created.id}) as cash,(select coalesce(sum(debit_cents-credit_cents),0)::int from current_account_entries where party_id=${owner.id}) as owner,(select coalesce(sum(debit_cents-credit_cents),0)::int from current_account_entries where party_id=${ownerSupplier.id}) as supplier,(select count(*)::int from documents where company_id=${created.id} and status='anulado') as voided`;
+      expect(reversed).toEqual({
+        cash: 0,
+        owner: 0,
+        supplier: 0,
+        voided: beforePreview.n + 2,
+      });
+      expect(
+        (await request("inmobiliaria/liquidaciones")).items.find(
+          (r: { id: string }) => r.id === charge.id,
+        ),
+      ).toBeTruthy();
+      await request(`empresas/${created.id}/eliminar`, {
+        confirmation: "Inmobiliaria QA",
+      });
       await request("auth/empresa", { companyId });
     }, 30_000);
 
@@ -1011,6 +1095,10 @@ describe.skipIf(!enabled)(
         400,
       );
       await request(`documentos/${first.documentId}/anular`, {}, 409);
+      await request(`reversiones/constructora/constructor/${first.id}`,undefined,404);
+      const stalePreview = await request(
+        `reversiones/constructora/certificados/${first.id}`,
+      );
       await request(`constructora/certificados/${first.id}/cobrar`, {
         amountCents: 25420,
         cashAccountId: cashId,
@@ -1019,6 +1107,15 @@ describe.skipIf(!enabled)(
       await request(
         `constructora/certificados/${first.id}/cobrar`,
         { amountCents: 1, cashAccountId: cashId, occurredOn: "2026-01-29" },
+        409,
+      );
+      await request(
+        `reversiones/constructora/certificados/${first.id}`,
+        {
+          reason: "Vista previa vencida",
+          confirmation: "ANULAR",
+          fingerprint: stalePreview.fingerprint,
+        },
         409,
       );
       const [afterFirst] =
@@ -1243,7 +1340,280 @@ describe.skipIf(!enabled)(
         confirmation: "Constructora QA",
       });
       await verifyBackupRestore(snapshot);
+      await request(`empresas/respaldos/${wipe.backupId}/restaurar`, {
+        confirmation: "Constructora QA",
+      });
+      const operations = (await request("reversiones/constructora")).items as {
+        id: string;
+        resource: string;
+      }[];
+      const quotaReceipt = operations.find((r) => r.resource === "cuotas")!;
+      await reverseOperation("constructora", "cuotas", quotaReceipt.id);
+      const [quotaState] =
+        await sql!`select paid_cents::int as paid from construction_installments where id=${quotas[0].id}`;
+      expect(quotaState.paid).toBe(0);
+      await request(
+        `reversiones/constructora/certificados/${first.id}`,
+        undefined,
+        409,
+      );
+      const release = operations.find((r) => r.resource === "reparos")!;
+      await request(
+        `reversiones/constructora/reparos/${release.id}`,
+        undefined,
+        409,
+      );
+      for (const c of operations.filter((r) => r.resource === "cobros"))
+        await reverseOperation("constructora", "cobros", c.id);
+      await reverseOperation("constructora", "reparos", release.id);
+      await reverseOperation("constructora", "certificados", final.id);
+      await reverseOperation("constructora", "certificados", second.id);
+      await reverseOperation("constructora", "certificados", first.id);
+      await reverseOperation("constructora", "anticipos", advance.id);
+      const [afterReversals] =
+        await sql!`select coalesce(sum(debit_cents-credit_cents),0)::int as debt from current_account_entries where party_id=${client.id}`;
+      expect(afterReversals.debt).toBe(0);
+      expect(
+        (await request(`constructora/items?workId=${w.id}`)).items.every(
+          (item: { certified_cents: string }) =>
+            Number(item.certified_cents) === 0,
+        ),
+      ).toBe(true);
+      await request(`empresas/${company.id}/eliminar`, {
+        confirmation: "Constructora QA",
+      });
       await request("auth/empresa", { companyId });
     }, 30_000);
+    it("respaldos manuales y automáticos: recuperar sin reutilizar números ni reactivar colaboradores", async () => {
+      const { buildCuit } = await import("../fiscal/cuit");
+      const created = await request("empresas", {
+        name: "Recuperación QA",
+        legalName: "Recuperación QA",
+        address: "Domicilio ficticio QA",
+        activityStartedOn: "2026-01-01",
+        cuit: buildCuit("30", "67123456"),
+        taxCondition: "ri",
+        businessSector: "comercio",
+        pointsOfSale: [1],
+        enabledModules: [
+          "clientes",
+          "proveedores",
+          "articulos",
+          "ventas",
+          "compras",
+          "caja",
+          "stock",
+          "cuentas_corrientes",
+          "comprobantes",
+          "auditoria",
+        ],
+      });
+      const client = await request("clientes", {
+        name: "Cliente respaldo QA",
+        taxCondition: "cf",
+      });
+      const catalog = await request("catalogos");
+      const type = catalog.documentTypes.find(
+        (t: { code: string }) => t.code === "FAC",
+      ).id;
+      const sale = () =>
+        request("documentos", {
+          kind: "venta",
+          documentTypeId: type,
+          partyId: client.id,
+          issuedOn: "2026-10-21",
+          paymentMethod: "cuenta_corriente",
+          lines: [
+            {
+              description: "Servicio QA",
+              quantity: 1,
+              unitPriceCents: 10000,
+              ivaRateBps: 2100,
+            },
+          ],
+        });
+      const first = await sale();
+      const [member] =
+        await sql!`select id from users where email='mateo@talon.demo'`;
+      const [role] =
+        await sql!`select id from roles where company_id=${created.id} and key='vendedor'`;
+      await sql!`insert into memberships(user_id,company_id,role_id) values(${member.id},${created.id},${role.id})`;
+      const saved = await request("empresas/respaldos", {
+        companyId: created.id,
+      });
+      const second = await sale();
+      await request(
+        `empresas/respaldos/${saved.backupId}/restaurar`,
+        { confirmation: "Otro nombre" },
+        400,
+      );
+      expect((await request(`documentos/${second.id}`)).status).toBe(
+        "confirmado",
+      );
+      await request(`empresas/respaldos/${saved.backupId}/restaurar`, {
+        confirmation: "Recuperación QA",
+      });
+      await request(`documentos/${second.id}`, undefined, 404);
+      expect((await request(`documentos/${first.id}`)).status).toBe(
+        "confirmado",
+      );
+      const third = await sale();
+      expect(third.number).toBe(second.number + 1);
+      const [inactive] =
+        await sql!`select active from memberships where company_id=${created.id} and user_id=${member.id}`;
+      expect(inactive.active).toBe(false);
+      const [before] =
+        await sql!`select id from company_lifecycle_events where target_id=${created.id} and action='antes_restaurar' order by created_at desc limit 1`;
+      expect(before.id).toBeTruthy();
+      const stale = await request("sync", {
+        operations: [
+          {
+            key: randomUUID(),
+            kind: "comprobante",
+            createdAt: "2100-01-01T00:00:00Z",
+            payload: {},
+          },
+        ],
+      });
+      expect(stale.results[0].status).toBe("conflict");
+      const normalCookie = cookie;
+      cookie = "";
+      await request("auth/login", {
+        email: "mateo@talon.demo",
+        password: "talon1234",
+      });
+      const hidden = await fetch(
+        `${base}/api/empresas/respaldos/${saved.backupId}`,
+        { headers: { Cookie: cookie } },
+      );
+      expect(hidden.status).toBe(404);
+      await request(
+        `empresas/respaldos/${saved.backupId}/restaurar`,
+        { confirmation: "Recuperación QA" },
+        404,
+      );
+      cookie = normalCookie;
+      const { mkdtempSync, readdirSync, readFileSync, rmSync } = await import(
+        "node:fs"
+      );
+      const { tmpdir } = await import("node:os");
+      const { join } = await import("node:path");
+      const directory = mkdtempSync(join(tmpdir(), "talon-backups-test-"));
+      try {
+        const env = {
+          ...process.env,
+          DATABASE_URL_ADMIN: urlFor("DATABASE_URL_ADMIN", database),
+          DATABASE_URL: urlFor("DATABASE_URL", database),
+          TALON_BACKUP_DIR: directory,
+        };
+        for (let i = 0; i < 2; i++)
+          execFileSync(
+            process.execPath,
+            ["scripts/backup-worker.mjs", "--once"],
+            { env, stdio: "pipe", timeout: 20000 },
+          );
+        const events =
+          await sql!`select id from company_lifecycle_events where target_id=${created.id} and action='automatico'`;
+        expect(events).toHaveLength(1);
+        const files = readdirSync(join(directory, database));
+        expect(files).toContain(`talon-${events[0].id}.json`);
+        const downloaded = JSON.parse(
+          readFileSync(
+            join(directory, database, `talon-${events[0].id}.json`),
+            "utf8",
+          ),
+        );
+        expect(downloaded.company.id).toBe(created.id);
+        expect(downloaded.documents).toHaveLength(2);
+        expect(downloaded).not.toHaveProperty("users");
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+      await request(`empresas/${created.id}/eliminar`, {
+        confirmation: "Recuperación QA",
+      });
+      await request("auth/empresa", { companyId });
+    }, 30000);
+    it("reintentos concurrentes del editor guardan una sola venta y no aceptan cambiar el contenido del envío", async () => {
+      await request("auth/empresa", { companyId });
+      const initial = await balances();
+      const requestId = randomUUID();
+      const send = (body: unknown, key: string = requestId) =>
+        fetch(`${base}/api/documentos`, {
+          method: "POST",
+          headers: {
+            Cookie: cookie,
+            "Content-Type": "application/json",
+            "Idempotency-Key": key,
+          },
+          body: JSON.stringify(body),
+        });
+      const responses = await Promise.all([
+        send(draft("cuenta_corriente")),
+        send(draft("cuenta_corriente")),
+      ]);
+      expect(responses.map((r) => r.status)).toEqual([200, 200]);
+      const results = await Promise.all(responses.map((r) => r.json()));
+      expect(results[0].data.id).toBe(results[1].data.id);
+      expect(await balances()).toEqual({
+        ...initial,
+        stock: initial.stock - 2,
+        debt: initial.debt + 24200,
+      });
+      expect((await send(draft("cuenta_corriente", 3))).status).toBe(409);
+      expect((await send(draft("cuenta_corriente"), "invalido")).status).toBe(
+        400,
+      );
+      await request(`documentos/${results[0].data.id}/anular`, {
+        reason: "Final QA de envío único",
+      });
+      expect((await send(draft("cuenta_corriente"))).status).toBe(409);
+      expect(await balances()).toEqual(initial);
+    });
+    it("compras simultáneas del mismo proveedor y número no se duplican aunque se omita el punto de venta", async () => {
+      await request("auth/empresa", { companyId });
+      const supplier = await request("proveedores", {
+        name: "Proveedor duplicados QA",
+        taxCondition: "ri",
+      });
+      const catalog = await request("catalogos");
+      const type = catalog.documentTypes.find(
+        (t: { code: string }) => t.code === "FCP",
+      ).id;
+      const body = {
+        kind: "compra",
+        documentTypeId: type,
+        partyId: supplier.id,
+        issuedOn: "2026-10-21",
+        paymentMethod: "cuenta_corriente",
+        supplierNumber: 45678,
+        lines: [
+          {
+            description: "Servicio de prueba",
+            quantity: 1,
+            unitPriceCents: 10000,
+          },
+        ],
+      };
+      const responses = await Promise.all(
+        [0, 1].map(() =>
+          fetch(`${base}/api/documentos`, {
+            method: "POST",
+            headers: { Cookie: cookie, "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          }),
+        ),
+      );
+      expect(responses.map((r) => r.status).sort()).toEqual([200, 409]);
+      const data = (await responses.find((r) => r.status === 200)!.json()).data;
+      const duplicate = await responses.find((r) => r.status === 409)!.json();
+      expect(duplicate.details.documentId).toBe(data.id);
+      const [rows] =
+        await sql!`select count(*)::int as n from documents where company_id=${companyId} and party_id=${supplier.id} and status='confirmado'`;
+      expect(rows.n).toBe(1);
+      await request(`documentos/${data.id}/anular`, {
+        reason: "QA de duplicados",
+      });
+    });
   },
 );

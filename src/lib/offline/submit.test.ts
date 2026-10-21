@@ -1,5 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cacheReference, setOfflineScope, holdSyncUntilOnline, pingHealth, precacheShell, mayPostSync, releaseSyncHold, submitQueued, watchSync } from "./submit";
+import {
+  cacheReference,
+  setOfflineScope,
+  holdSyncUntilOnline,
+  pingHealth,
+  precacheShell,
+  mayPostSync,
+  releaseSyncHold,
+  submitQueued,
+  watchSync,
+} from "./submit";
 
 vi.mock("./idb", () => ({
   putOp: vi.fn(async () => {}),
@@ -12,7 +22,7 @@ vi.mock("./idb", () => ({
   putConflict: vi.fn(async () => {}),
 }));
 
-import { putKv } from "./idb";
+import { putKv, getKv, putOp } from "./idb";
 
 type Listener = () => void;
 
@@ -80,7 +90,12 @@ afterEach(() => {
 describe("sync offline", () => {
   it("comparte pings concurrentes sin retener resultados viejos", async () => {
     let finish!: (value: { ok: boolean }) => void;
-    const fetchMock = vi.fn(() => new Promise<{ ok: boolean }>((resolve) => { finish = resolve; }));
+    const fetchMock = vi.fn(
+      () =>
+        new Promise<{ ok: boolean }>((resolve) => {
+          finish = resolve;
+        }),
+    );
     vi.stubGlobal("fetch", fetchMock);
     const first = pingHealth();
     const second = pingHealth();
@@ -101,14 +116,24 @@ describe("sync offline", () => {
     try {
       await precacheShell();
       expect(fetchMock).not.toHaveBeenCalled();
-    } finally { vi.unstubAllEnvs(); }
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("descarta una referencia que termina de cargar después de cambiar de empresa", async () => {
     installBrowser();
     vi.mocked(putKv).mockClear();
     let finish!: (response: Response) => void;
-    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>((resolve) => { finish = resolve; })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            finish = resolve;
+          }),
+      ),
+    );
     setOfflineScope("user", "company-a");
     const pending = cacheReference(true);
     setOfflineScope("user", "company-b");
@@ -175,18 +200,34 @@ describe("sync offline", () => {
     vi.stubGlobal("navigator", { onLine: false });
     vi.stubGlobal("window", {
       dispatchEvent() {},
-      localStorage: { setItem() {}, getItem() { return null; } },
-      sessionStorage: { setItem() {}, getItem() { return null; } },
+      localStorage: {
+        setItem() {},
+        getItem() {
+          return null;
+        },
+      },
+      sessionStorage: {
+        setItem() {},
+        getItem() {
+          return null;
+        },
+      },
     });
     releaseSyncHold();
-    const result = await submitQueued("vale", "/api/estacion/flota/vale", { liters: 2, partyName: "ACME" });
+    const result = await submitQueued("vale", "/api/estacion/flota/vale", {
+      liters: 2,
+      partyName: "ACME",
+    });
     expect(result.queued).toBe(true);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("si /api/health responde, sincroniza sin esperar el evento online", async () => {
     const { win } = installBrowser();
-    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true })),
+    );
     holdSyncUntilOnline();
     const flush = vi.fn(async () => "ok" as const);
     const stop = watchSync(flush);
@@ -194,5 +235,25 @@ describe("sync offline", () => {
     await settle();
     expect(flush).toHaveBeenCalledTimes(1);
     stop();
+  });
+  it("conserva la generación de recuperación al preparar una operación offline", async () => {
+    const { nav } = installBrowser();
+    nav.onLine = false;
+    setOfflineScope("qa-recovery-user", "qa-recovery-company");
+    vi.mocked(getKv).mockResolvedValueOnce({
+      recoveryVersion: "a8ea3ff3-32a1-4f35-955f-dd225f0bbede",
+    });
+    vi.mocked(putOp).mockClear();
+    const result = await submitQueued("turno", "/api/estacion/turnos", {
+      nota: "QA generación",
+    });
+    expect(result.queued).toBe(true);
+    expect(putOp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        owner: "qa-recovery-user:qa-recovery-company",
+        recoveryVersion: "a8ea3ff3-32a1-4f35-955f-dd225f0bbede",
+      }),
+    );
+    setOfflineScope(null, null);
   });
 });

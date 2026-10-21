@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { z } from "zod";
@@ -49,6 +50,7 @@ import { sync } from "./sync";
 import { informes } from "./informes";
 import { constructora } from "./constructora";
 import { inmobiliaria } from "./inmobiliaria";
+import { reversals } from "./reversals";
 import { companyManagement } from "./company-management";
 import { migracion } from "./migracion";
 
@@ -74,6 +76,7 @@ export async function dispatch(method: string, path: string[], req: Request): Pr
     return ok({ db: rows[0]?.ok === 1 });
   }
 
+  if (root === "reversiones") return reversals(method, path, req);
   if (root === "constructora") return constructora(method, path, req);
   if (root === "inmobiliaria") return inmobiliaria(method, path, req);
   if (root === "empresas") return companyManagement(method, path, req);
@@ -309,6 +312,7 @@ async function parties(method: string, kind: "customer" | "supplier", id: string
       const term = page.q ? likeTerm(page.q) : "";
       const where = and(
         eq(table.companyId, auth.company.companyId),
+        url.searchParams.get("active")==="1" ? eq(table.active,true) : undefined,
         term
           ? or(ilike(table.name, term), ilike(table.cuit, term), ilike(table.fantasyName, term), ilike(table.code, term))
           : undefined,
@@ -390,6 +394,9 @@ async function parties(method: string, kind: "customer" | "supplier", id: string
     const body = await readBody(req, partySchema);
     const cuit = normalizeTaxId(body.docType, body.cuit);
     return withTenant(auth.company.companyId, auth.user.id, async (tx) => {
+      const source=kind==="customer"?customers:suppliers;
+      const [before]=await tx.select().from(source).where(and(eq(source.id,id),eq(source.companyId,auth.company.companyId))).for("update");
+      if(!before)throw new HttpError(404,"No encontramos la ficha");
       const patch = {
         name: body.name,
         fantasyName: body.fantasyName || null,
@@ -436,6 +443,7 @@ async function parties(method: string, kind: "customer" | "supplier", id: string
         entity: moduleKey,
         entityId: row.id,
         summary: `Editó la ficha de ${body.name}`,
+        metadata:{changes:Object.entries(row).filter(([field,value])=>field!=="updatedAt"&&JSON.stringify(value)!==JSON.stringify((before as Record<string,unknown>)[field])).map(([field,value])=>({field,before:(before as Record<string,unknown>)[field]??null,after:value}))},
       });
       return ok(row);
     });
@@ -444,6 +452,7 @@ async function parties(method: string, kind: "customer" | "supplier", id: string
 }
 
 async function nextCode(tx: Parameters<Parameters<typeof withTenant>[2]>[0], table: "customers" | "suppliers" | "products", companyId: string, prefix: string) {
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${companyId}:${table}`},260030))`);
   const source = table === "customers" ? customers : table === "suppliers" ? suppliers : products;
   const rows = await tx.select({ total: sql<number>`count(*)::int` }).from(source).where(eq(source.companyId, companyId));
   return `${prefix}${String(Number(rows[0]?.total ?? 0) + 1).padStart(4, "0")}`;
@@ -614,12 +623,25 @@ async function docs(method: string, id: string | undefined, action: string | und
     if (body.allowNegativeStock && !can(auth.permissions, "stock", "editar")) {
       throw new HttpError(403, "Tu puesto no puede dejar el stock en negativo.");
     }
-    return withTenant(auth.company.companyId, auth.user.id, (tx) =>
-      createDocument(tx, { userId: auth.user.id, companyId: auth.company.companyId }, {
-        ...body,
-        allowNegativeStock: Boolean(body.allowNegativeStock) && can(auth.permissions, "stock", "editar"),
-      }).then((data) => ok(data)),
-    );
+    const requestId=req.headers.get("Idempotency-Key");
+    if(requestId && !z.string().uuid().safeParse(requestId).success)throw new HttpError(400,"El identificador del envío no es válido");
+    const fingerprint=createHash("sha256").update(JSON.stringify(body)).digest("hex");
+    return withTenant(auth.company.companyId, auth.user.id, async (tx) => {
+      const key=requestId ? `editor:${requestId}` : null;
+      if(key){
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${auth.company.companyId}:${key}`},260029))`);
+        const [existing]=await tx.execute<{user_id:string;kind:string;result:{fingerprint:string;document:{id:string}}}>(sql`select user_id,kind,result from idempotency_keys where company_id=${auth.company.companyId} and key=${key}`);
+        if(existing){
+          if(existing.user_id!==auth.user.id || existing.kind!=="editor.documento" || existing.result.fingerprint!==fingerprint)throw new HttpError(409,"Este envío ya se utilizó con otros datos. Revisá el comprobante antes de continuar.");
+          const document=await getDocument(tx,auth.company.companyId,existing.result.document.id);
+          if(!document || document.status!=="confirmado")throw new HttpError(409,"Este envío ya fue registrado y luego anulado o recuperado. Iniciá un nuevo comprobante.");
+          return ok(existing.result.document);
+        }
+      }
+      const data=await createDocument(tx,{userId:auth.user.id,companyId:auth.company.companyId},{...body,allowNegativeStock:Boolean(body.allowNegativeStock)&&can(auth.permissions,"stock","editar")});
+      if(key)await tx.execute(sql`insert into idempotency_keys(company_id,key,user_id,kind,status,result) values(${auth.company.companyId},${key},${auth.user.id},'editor.documento','applied',${JSON.stringify({fingerprint,document:data})}::jsonb)`);
+      return ok(data);
+    });
   }
   if (method === "GET" && id && !action) {
     const auth = await getAuth();
@@ -1230,10 +1252,14 @@ async function auditoria(method: string, url: URL) {
   const desde = url.searchParams.get("desde") ?? "";
   const hasta = url.searchParams.get("hasta") ?? "";
   const action = (url.searchParams.get("accion") ?? "").trim().slice(0, 40);
+  const entity = (url.searchParams.get("entidad") ?? "").slice(0,80);
+  const record = (url.searchParams.get("registro") ?? "").slice(0,100);
   return withTenant(auth.company.companyId, auth.user.id, async (tx) => {
     const term = page.q ? likeTerm(page.q) : "";
     const where = and(
       eq(auditLog.companyId, auth.company.companyId),
+      entity ? eq(auditLog.entity,entity) : undefined,
+      record ? eq(auditLog.entityId,record) : undefined,
       term ? or(ilike(auditLog.summary, term), ilike(auditLog.action, term), ilike(users.name, term)) : undefined,
       action ? ilike(auditLog.action, `${action}%`) : undefined,
       desde ? sql`${auditLog.createdAt} >= ${desde}::date` : undefined,
@@ -1246,6 +1272,7 @@ async function auditoria(method: string, url: URL) {
           action: auditLog.action,
           entity: auditLog.entity,
           summary: auditLog.summary,
+          changes: sql`coalesce(${auditLog.metadata}->'changes','[]'::jsonb)`,
           createdAt: auditLog.createdAt,
           userName: users.name,
         })

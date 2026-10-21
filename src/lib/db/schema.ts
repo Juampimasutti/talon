@@ -306,6 +306,7 @@ export const stockMovements = pgTable("stock_movements", {
 });
 
 export const cashMovements = pgTable("cash_movements", {
+  businessOperationId: uuid("business_operation_id"),
   id: uuid("id").primaryKey().defaultRandom(),
   companyId: uuid("company_id").notNull(),
   cashAccountId: uuid("cash_account_id").notNull(),
@@ -329,6 +330,7 @@ export const ledgerAccounts = pgTable("ledger_accounts", {
 });
 
 export const currentAccountEntries = pgTable("current_account_entries", {
+  businessOperationId: uuid("business_operation_id"),
   id: uuid("id").primaryKey().defaultRandom(),
   companyId: uuid("company_id").notNull(),
   partyType: text("party_type").notNull(),

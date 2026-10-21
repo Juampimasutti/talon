@@ -1,3 +1,4 @@
+import { startBackupWorker } from "./backup-process.mjs";
 import { spawn } from "node:child_process";
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -104,7 +105,8 @@ async function main() {
   if (process.argv.includes("--serve")) {
     await run(["node_modules/next/dist/bin/next", "build"]);
     await run(["scripts/shell-assets.mjs"]);
-    await run(["node_modules/next/dist/bin/next", "start", "--hostname", "0.0.0.0", "--port", "4319"]);
+    const stopBackups=startBackupWorker();
+    try {await run(["node_modules/next/dist/bin/next", "start", "--hostname", "0.0.0.0", "--port", "4319"]);} finally {stopBackups();}
   }
 }
 

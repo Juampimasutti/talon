@@ -81,7 +81,8 @@ async function reference() {
             and (${ownReparto} = false or c.truck_id in (select truck_id from fuel_trips where company_id = ${companyId} and driver_user_id = ${auth.user.id}))
         `)
       : [];
-    return ok({ fetchedAt: new Date().toISOString(), articles, fuel, nozzles, tanks, customers, vehicles, vouchers, trucks, compartments });
+    const [recovery]=await tx.execute<{version:string|null}>(sql`select company_restore_version()::text as version`);
+    return ok({ recoveryVersion:recovery.version, fetchedAt: new Date().toISOString(), articles, fuel, nozzles, tanks, customers, vehicles, vouchers, trucks, compartments });
   });
 }
 
@@ -105,6 +106,7 @@ async function push(req: Request) {
       kind: z.string().refine((value): value is QueuedOp["kind"] => (OP_KINDS as readonly string[]).includes(value)),
       payload: z.record(z.string(), z.any()),
       createdAt: z.string(),
+      recoveryVersion:z.string().uuid().nullable().optional(),
     })).max(40),
   }));
   const ordered = sortQueue(body.operations as QueuedOp[]);
@@ -126,7 +128,10 @@ async function applyOne(tx: Tx, auth: AuthContext, op: QueuedOp) {
     select result from idempotency_keys where company_id = ${auth.company.companyId} and key = ${op.key}
   `);
   if (existing[0]) return { status: "duplicate", body: existing[0].result };
-  const result = await runOp(tx, auth, op);
+  const [recovery]=await tx.execute<{version:string|null}>(sql`select company_restore_version()::text as version`);
+  const result = recovery.version !== (op.recoveryVersion ?? null)
+    ? {status:"conflict" as const,reason:"Esta operación fue preparada antes de recuperar la empresa. Revisala antes de volver a cargarla para evitar duplicados."}
+    : await runOp(tx, auth, op);
   await tx.execute(sql`
     insert into idempotency_keys (company_id, key, user_id, kind, status, result)
     values (${auth.company.companyId}, ${op.key}, ${auth.user.id}, ${op.kind}, ${result.status}, ${JSON.stringify(result)}::jsonb)

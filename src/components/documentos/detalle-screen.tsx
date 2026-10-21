@@ -149,6 +149,7 @@ export function DetalleScreen({ kind }: { kind: keyof typeof META }) {
           ) : null}
         </div>
       </div>
+      {me.data && can(me.data.permissions,"auditoria","ver") ? <Link className="w-fit text-sm text-primary underline" href={`/auditoria?entidad=documento&registro=${data.id}`}>Ver historial de este comprobante</Link> : null}
       <Dialog open={voidOpen} onOpenChange={(open) => { if (!pending) setVoidOpen(open); }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Anular comprobante</DialogTitle></DialogHeader>

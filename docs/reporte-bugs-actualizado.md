@@ -73,3 +73,15 @@ los puestos editados se marcan como personalizados. Prueba de regresión incluid
 Las cinco comprobaciones offline históricas se repitieron en producción local.
 El alcance, evidencia y pendientes de empresas y rubros están en
 [el informe de verificación](verificacion-empresas-rubros.md).
+
+## Uso y seguridad · actualización posterior del 21/10/2026
+
+El aviso genérico «Elegí el comprobante y la cuenta» fue reemplazado por validaciones
+concretas y foco en el campo. Se incorporaron selección explícita, alta de fichas sin
+salir, protección de reintentos y enlace al comprobante de proveedor duplicado.
+
+La revisión de duplicados encontró que un punto de venta omitido no se comparaba con
+`NULL`; ahora se comprueba y se probó con compras concurrentes. Las anulaciones
+coordinadas de alquileres y obra y la recuperación de respaldos tienen pruebas de saldos,
+concurrencia, permisos y rollback. Ver [evidencia y límites](verificacion-uso-y-seguridad.md).
+ARCA continúa pendiente por decisión del usuario.

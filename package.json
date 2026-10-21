@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --hostname 0.0.0.0 --port 4317",
+    "dev": "node scripts/serve.mjs dev --hostname 0.0.0.0 --port 4317",
     "build": "next build",
-    "start": "next start --hostname 0.0.0.0 --port 4317",
+    "start": "node scripts/serve.mjs start --hostname 0.0.0.0 --port 4317",
     "lint": "eslint",
     "test": "vitest run",
     "test:db": "vitest run src/lib/db/rls.integration.test.ts",
@@ -18,8 +18,10 @@
     "local": "tsx scripts/local.ts",
     "demo:setup": "tsx scripts/demo-fija.ts",
     "demo": "tsx scripts/demo-fija.ts --serve",
-    "local:prod": "next build && node scripts/shell-assets.mjs && next start --hostname 0.0.0.0 --port 4318",
-    "empresa:autorizar": "tsx scripts/company-operator.ts"
+    "local:prod": "next build && node scripts/shell-assets.mjs && node scripts/serve.mjs start --hostname 0.0.0.0 --port 4318",
+    "empresa:autorizar": "tsx scripts/company-operator.ts",
+    "respaldos:ahora": "node scripts/backup-worker.mjs --once",
+    "respaldos:auto": "node scripts/backup-worker.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

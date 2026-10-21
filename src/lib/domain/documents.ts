@@ -246,13 +246,14 @@ export async function createDocument(tx: Tx, ctx: { userId: string; companyId: s
   }
 
   if (input.kind === "compra" && input.supplierNumber) {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${ctx.companyId}:${party.id}:${input.supplierPos ?? 0}:${input.supplierNumber}`},260028))`);
     const duplicated = await tx.execute<{ id: string }>(sql`
       select id::text from documents
       where company_id = ${ctx.companyId} and kind = 'compra' and status = 'confirmado'
-        and party_id = ${party.id} and supplier_pos = ${input.supplierPos ?? 0} and supplier_number = ${input.supplierNumber}
+        and party_id = ${party.id} and coalesce(supplier_pos,0) = ${input.supplierPos ?? 0} and supplier_number = ${input.supplierNumber}
       limit 1
     `);
-    if (duplicated[0]) throw new HttpError(409, "Ese proveedor ya tiene una factura con ese número");
+    if (duplicated[0]) throw new HttpError(409, "Ese proveedor ya tiene una factura con ese número", {documentId:duplicated[0].id});
   }
 
   const pointOfSale = input.pointOfSale ?? company.pointOfSale;

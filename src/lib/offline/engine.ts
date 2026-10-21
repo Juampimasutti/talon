@@ -21,6 +21,8 @@ export type QueuedOp = {
   createdAt: string;
   /** userId:companyId. Sin dueño, el ítem queda oculto y no se sincroniza. */
   owner?: string;
+  /** Generación del servidor al preparar la operación; no se cambia al sincronizar. */
+  recoveryVersion?: string | null;
 };
 
 export type SyncStep = {

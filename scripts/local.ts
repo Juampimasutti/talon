@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { startBackupWorker } from "./backup-process.mjs";
 import { loadEnv } from "./load-env";
 
 loadEnv();
@@ -8,15 +9,30 @@ function run(command: string, args: string[]) {
     const child = spawn(command, args, { stdio: "inherit" });
     child.on("exit", (code) => {
       if (code === 0) resolve();
-      else reject(new Error(`${command} ${args.join(" ")} salió con código ${code}`));
+      else
+        reject(
+          new Error(`${command} ${args.join(" ")} salió con código ${code}`),
+        );
     });
   });
 }
 
 async function main() {
-  await run("npx", ["tsx", "scripts/migrate.ts"]);
-  await run("npx", ["tsx", "scripts/seed.ts"]);
-  await run("npx", ["next", "dev", "--hostname", "0.0.0.0", "--port", "4317"]);
+  await run(process.execPath, ["--import", "tsx", "scripts/migrate.ts"]);
+  await run(process.execPath, ["--import", "tsx", "scripts/seed.ts"]);
+  const stopBackups = startBackupWorker();
+  try {
+    await run(process.execPath, [
+      "node_modules/next/dist/bin/next",
+      "dev",
+      "--hostname",
+      "0.0.0.0",
+      "--port",
+      "4317",
+    ]);
+  } finally {
+    stopBackups();
+  }
 }
 
 main().catch((error) => {

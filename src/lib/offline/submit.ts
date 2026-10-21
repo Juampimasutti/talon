@@ -71,25 +71,28 @@ export function releaseSyncHold() {
 }
 
 async function submitQueuedNow(kind: OpKind, path: string, payload: Record<string, unknown>, key: string): Promise<SubmitResult> {
+  const owner=currentScope;
+  const reference=owner ? await getKv<{recoveryVersion?:string|null}>(`referencia:${owner}`).catch(()=>null) : null;
+  const recoveryVersion=reference?.recoveryVersion??null;
   if (!mayPostSync(!offlineNow(), pauseUntilOnline)) {
     markReachable(false);
-    return queueLocal(kind, path, payload, key);
+    return queueLocal(kind, path, payload, key, owner, recoveryVersion);
   }
   try {
       if (offlineNow()) {
         holdSyncUntilOnline();
         markReachable(false);
-        return queueLocal(kind, path, payload, key);
+        return queueLocal(kind, path, payload, key, owner, recoveryVersion);
       }
       if (typeof navigator !== "undefined" && navigator.onLine === false) {
         holdSyncUntilOnline();
         markReachable(false);
-        return queueLocal(kind, path, payload, key);
+        return queueLocal(kind, path, payload, key, owner, recoveryVersion);
       }
       const response = await fetch("/api/sync", {
         method: "POST",
         headers: { "content-type": "application/json", accept: "application/json" },
-        body: JSON.stringify({ operations: [{ key, kind, payload, createdAt: new Date().toISOString() }] }),
+        body: JSON.stringify({ operations: [{ key, kind, payload, createdAt: new Date().toISOString(),recoveryVersion }] }),
       });
       if (!response.ok) {
         const failed = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -106,12 +109,12 @@ async function submitQueuedNow(kind: OpKind, path: string, payload: Record<strin
       holdSyncUntilOnline();
       markReachable(false);
     }
-  return queueLocal(kind, path, payload, key);
+  return queueLocal(kind, path, payload, key, owner, recoveryVersion);
 }
 
-async function queueLocal(kind: OpKind, path: string, payload: Record<string, unknown>, key: string): Promise<SubmitResult> {
+async function queueLocal(kind: OpKind, path: string, payload: Record<string, unknown>, key: string, owner:string|null, recoveryVersion:string|null): Promise<SubmitResult> {
   void path;
-  const op: QueuedOp = { key, kind, payload, createdAt: new Date().toISOString(), owner: currentScope ?? undefined };
+  const op: QueuedOp = { key, kind, payload, createdAt: new Date().toISOString(), owner: owner ?? undefined, recoveryVersion };
   await putOp(op);
   if (kind === "comprobante" || kind === "vale" || kind === "reparto.entrega") {
     const receipt = provisionalReceipt({

@@ -42,3 +42,6 @@ next-env.d.ts
 
 # mediciones locales
 /tmp-measure/
+
+# respaldos locales con datos privados
+/backups/

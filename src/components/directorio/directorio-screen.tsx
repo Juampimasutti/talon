@@ -218,6 +218,7 @@ export function DirectorioScreen({ kind }: { kind: "clientes" | "proveedores" })
           <DialogHeader>
             <DialogTitle>{editing ? `Editar ${entity}` : `Nuevo ${entity}`}</DialogTitle>
           </DialogHeader>
+          {editing && me.data && can(me.data.permissions,"auditoria","ver") ? <a className="text-sm text-primary underline" href={`/auditoria?entidad=${kind}&registro=${editing.id}`}>Ver historial de esta ficha</a> : null}
           <form noValidate onSubmit={save} className="grid gap-3">
             <Field label="Nombre">
               <Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />

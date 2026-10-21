@@ -81,18 +81,14 @@ El servidor coordina las escrituras por empresa para que el respaldo no quede a 
 de una operación. Una referencia antigua inconsistente que pudiera provocar un
 `CASCADE` hacia otra empresa aborta el borrado completo.
 
-En **Mis respaldos** (`/respaldos`) se puede volver a descargar el archivo, incluso
-si la empresa ya no existe. Sólo puede descargarlo el usuario que ejecutó la acción.
-Si elimina su última empresa, puede volver a iniciar sesión para consultar sus
-respaldos. Incluyen esquema aplicado, configuración, maestros, documentos, movimientos,
-roles, permisos y archivos inmobiliarios. Las identidades globales se referencian
-por ID/nombre/mail; no se exportan contraseñas ni sesiones de otras empresas.
+En **Respaldos y recuperación** (`/respaldos`) se pueden crear y descargar copias,
+incluso de empresas eliminadas por el usuario. Los administradores actuales pueden
+administrar las copias de su empresa. No se exportan contraseñas ni sesiones.
 
-El respaldo almacenado en PostgreSQL permite recuperar un borrado lógico, pero no
-sustituye una copia externa del servidor. **No hay botón de restauración en la app**:
-la recuperación requiere intervención técnica. La prueba automatizada restaura los
-archivos en la misma instancia de QA con las identidades globales existentes, valida
-claves foráneas y compara cada registro; revierte después la transacción de prueba.
+La actualización de uso y seguridad incorpora recuperación guiada de copias guardadas
+por el sistema de la misma versión, con confirmación del nombre y respaldo previo al
+reemplazo. Incluye copias automáticas locales mientras Talón está abierto. Ver
+[alcance, acceso y recuperación](mejoras-uso-y-seguridad.md).
 
 ## Inmobiliaria
 
@@ -128,8 +124,8 @@ Sólo aparece en el menú y en la matriz de puestos cuando está activada.
   netos pendientes de liquidar a propietarios, derivados de los registros guardados.
 
 Los recibos liquidados al propietario y sus facturas de comisión no se pueden anular
-sueltos desde Ventas: eso dejaría la liquidación sin respaldo. **Falta el circuito
-coordinado de reversión** de esas liquidaciones. Las señas recibidas quedan como
+sueltos desde Ventas: eso dejaría la liquidación sin respaldo. Usar **Corregir / anular
+operaciones** en Inmobiliaria para revertir juntos comisión, pago y recibo, según la operación elegida. Las señas recibidas quedan como
 anticipos del comprador; transferirlas al propietario y resolver devoluciones de
 reservas no se automatizó. Las etapas no reemplazan boleto, escritura ni asesoramiento
 legal. Son límites reales de esta primera implementación.
@@ -200,7 +196,8 @@ Las obras de QA con anticipos o certificados anteriores a esa confirmación se c
 sin recalcular; se bloquea su continuación financiera hasta revisarlas.
 
 No se habilitó anular por separado desde Ventas los comprobantes vinculados a anticipos,
-certificados, liberación de reparo y cuotas: falta la reversión coordinada del circuito.
+certificados, liberación de reparo y cuotas. Ahora se corrigen desde **Corregir / anular
+operaciones** en Constructora, con vista previa y compensación de movimientos.
 Los netos cero o negativos se rechazan; no se inventa una factura positiva para esos
 casos. La emisión fiscal real sigue pendiente de verificar con ARCA.
 
@@ -242,9 +239,10 @@ Los resultados de navegador y verificación final se registran en
 
 - CAE/QR y emisión ARCA real: el adaptador fiscal existente sigue sin implementarse
   ni verificarse contra el organismo. No se configuraron credenciales reales.
-- Reversiones coordinadas de los nuevos circuitos financieros y devolución de
-  depósitos/señas. Los bloqueos evitan desbalances, pero no reemplazan ese trabajo.
-- Restauración desde una pantalla: sólo se probó la recuperación técnica en QA.
+- Devolución de depósitos/señas y reversión de ventas inmobiliarias. Las reversiones
+  de alquileres, anticipos, certificados, cobros de cuotas y liberación de reparo se
+  documentan en [uso y seguridad](mejoras-uso-y-seguridad.md).
+- Recuperación desde archivos externos o de otra versión: requiere intervención técnica.
 - Índices oficiales: carga manual de valores y fuentes; no hay actualización externa.
 - Listados nuevos limitados a 100 registros por sección (presupuesto: hasta 500 ítems);
   falta paginación completa. Los selectores de fichas/artículos/compras permiten buscar.

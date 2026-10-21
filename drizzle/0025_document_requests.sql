@@ -1,0 +1,1 @@
+CREATE POLICY idempotency_document_insert ON idempotency_keys FOR INSERT WITH CHECK(company_id=app_company_id() AND kind='editor.documento' AND user_id=app_user_id() AND (app_has_permission('compras.crear') OR app_has_permission('pedidos.crear') OR app_has_permission('remitos.crear')));

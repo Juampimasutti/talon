@@ -620,6 +620,7 @@ export async function inmobiliaria(
         partyId: String(c.owner_supplier_id),
         occurredOn: b.occurredOn,
         description: `Liquidación propietario ${row.id}`,
+        businessOperationId: row.id,
         creditCents: amounts.payable,
       });
       if (invoice)
@@ -680,6 +681,7 @@ export async function inmobiliaria(
           direction: "out",
           amountCents: amount,
           description: `Orden de pago inmobiliaria ${id}`,
+          businessOperationId: id,
           occurredOn: b.occurredOn,
           createdBy: auth.user.id,
         });
@@ -689,6 +691,7 @@ export async function inmobiliaria(
           partyId: String(s.owner_supplier_id),
           occurredOn: b.occurredOn,
           description: `Orden de pago inmobiliaria ${id}`,
+          businessOperationId: id,
           debitCents: amount,
         });
       }

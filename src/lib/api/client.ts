@@ -113,10 +113,10 @@ export function clearSessionCache() {
   window.dispatchEvent(new Event("talon-session"));
 }
 
-export function apiSend<T>(path: string, method: string, body?: unknown): Promise<T> {
+export function apiSend<T>(path: string, method: string, body?: unknown, options?: {requestId?:string}): Promise<T> {
   return fetch(path, {
     method,
-    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    headers: { Accept: "application/json", "Content-Type": "application/json", ...(options?.requestId ? {"Idempotency-Key":options.requestId}: {}) },
     body: body === undefined ? undefined : JSON.stringify(body),
   }).then((res) => parse<T>(res));
 }

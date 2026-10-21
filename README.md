@@ -1,5 +1,7 @@
 # Talón
 
+Mejoras de uso, reversiones y respaldos: [guía de actualización](docs/mejoras-uso-y-seguridad.md). ARCA queda pendiente.
+
 Mejoras y mediciones actuales: [reporte de rendimiento](docs/reporte-rendimiento.md).
 
 Demo persistente con escenarios ficticios: `npm run demo`. [Preparación, acceso y datos](docs/demo-fija.md).
@@ -11,7 +13,7 @@ La demo incluye Distribuidora Paraná, Costa & Asociados, Estación Almafuerte, 
 ## Por qué este stack
 
 - **Next.js, React y TypeScript.** Una sola app para la interfaz y la API, con una pantalla por ruta. Así el editor de comprobantes no viaja cuando abrís el tablero.
-- **Tailwind y shadcn/ui.** Botones, diálogos y pestañas accesibles, con una paleta propia (papel y verde) en vez del tema genérico.
+- **Tailwind y shadcn/ui.** Botones, diálogos y pestañas accesibles, con una paleta sobria de azul noche, azul vivo y superficies claras en vez del tema genérico.
 - **Postgres en cualquier lado.** La app habla SQL por `DATABASE_URL`. Sirve Postgres local, el de Docker, Neon o Supabase en el plan gratis. No hay SDK de un proveedor.
 - **Drizzle.** Consultas tipadas sobre esas tablas, sin atarte a un host.
 - **RLS en Postgres.** El rol de la aplicación no es superusuario y no puede saltear políticas. Cada pedido corre dentro de una transacción que fija la empresa y el usuario. Los permisos del puesto también se chequean en la API, así que un vendedor no entra a compras ni aunque arme el request a mano.

@@ -1,4 +1,5 @@
 "use client";
+import dynamic from "next/dynamic";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -15,6 +16,7 @@ import { useMe, useCatalog } from "@/components/use-me";
 import { EntryForm, type Field } from "@/components/business-entry-form";
 import { Button } from "@/components/ui/button";
 import { CertificateForm } from "./certificate-form";
+const BusinessReversalPanel=dynamic(()=>import("@/components/business-reversal-panel").then(m=>m.BusinessReversalPanel));
 type Row = Record<string, string | number | boolean | null>;
 const tabs = {
   obras: "Obras",
@@ -412,6 +414,7 @@ export function ConstructoraScreen() {
     | undefined;
   return (
     <main className="grid gap-4 p-4 md:p-6">
+      {me.data && can(me.data.permissions,"constructora","anular") ? <BusinessReversalPanel sector="constructora" /> : null}
       <div>
         <h1 className="text-2xl font-semibold">Constructora</h1>
         <p className="text-sm text-muted-foreground">
@@ -579,7 +582,7 @@ export function ConstructoraScreen() {
                     </td>
                     <td className="p-2 text-right">
                       {advance?.repair_release_id
-                        ? "Transferido a factura final"
+                        ? "Habilitado para cobro"
                         : formatMoney(Number(c?.retained_cents ?? 0))}
                     </td>
                   </tr>
