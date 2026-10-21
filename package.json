@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:db": "vitest run src/lib/db/rls.integration.test.ts",
+    "test:flows": "npm run build && RUN_FLOW_TESTS=1 vitest run src/lib/db/business-flows.integration.test.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
     "db:explain": "tsx scripts/explain.ts",
