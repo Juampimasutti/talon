@@ -19,10 +19,12 @@ async function parse<T>(res: Response): Promise<T> {
   return body.data as T;
 }
 
+let requestEpoch = 0;
+
 export function apiGet<T>(path: string, opts?: { fresh?: boolean }): Promise<T> {
   const run = () => fetch(path, { headers: { Accept: "application/json" }, cache: "no-cache" }).then((res) => parse<T>(res));
   if (opts?.fresh) return run();
-  return dedupe(`GET ${path}`, run);
+  return dedupe(`${requestEpoch}:GET ${path}`, run);
 }
 
 let sessionPromise: Promise<Me> | null = null;
@@ -32,6 +34,7 @@ let sessionStamp = 0;
 const SESSION_KEY = "talon-session-user";
 
 export function primeSession(me: Me) {
+  requestEpoch += 1;
   sessionStamp = Date.now();
   sessionPromise = Promise.resolve(me);
   persistSession(me, sessionStamp);
@@ -101,6 +104,7 @@ export function loadSession(): Promise<Me> {
 }
 
 export function clearSessionCache() {
+  requestEpoch += 1;
   sessionPromise = null;
   sessionStamp = 0;
   if (typeof window === "undefined") return;

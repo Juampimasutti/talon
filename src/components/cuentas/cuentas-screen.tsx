@@ -29,8 +29,8 @@ export function CuentasScreen() {
     queryFn: () => apiGet<{ items: Item[] }>(`/api/cuentas?partyType=${partyType}`),
   });
   const detail = useQuery({
-    queryKey: ["cuenta", partyId, partyType],
-    enabled: Boolean(partyId),
+    queryKey: ["cuenta", me.data?.company.id, partyId, partyType],
+    enabled: Boolean(me.data && partyId),
     queryFn: () => apiGet<{ entries: Entry[] }>(`/api/cuentas?partyType=${partyType}&partyId=${partyId}`),
   });
   const canCollect = me.data ? can(me.data.permissions, "cuentas_corrientes", "crear") && can(me.data.permissions, "caja", "crear") : false;
@@ -103,7 +103,13 @@ export function CuentasScreen() {
         </ul>
       </section>
       <section className="rounded-xl border bg-card p-4">
-        {!partyId ? <p className="text-sm text-muted-foreground">Elegí una cuenta para ver el mayor.</p> : null}
+        {!partyId ? (
+          <div className="grid gap-3">
+            <h2 className="font-semibold">{partyType === "customer" ? "Saldos de clientes" : "Saldos de proveedores"}</h2>
+            <p className="text-xl font-semibold tabular-nums">{list.data ? balancePhrase(partyType === "supplier" ? "proveedor" : "cliente", list.data.items.reduce((sum, item) => sum + item.balanceCents, 0)) : "Cargando saldos…"}</p>
+            <p className="text-sm text-muted-foreground">Elegí una cuenta para ver el mayor.</p>
+          </div>
+        ) : null}
         {detail.data ? (
           <ul className="divide-y">
             {detail.data.entries.map((entry) => (

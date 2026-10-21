@@ -1,0 +1,48 @@
+{
+  "checks": [
+    "Aviso sin conexión visible durante 5 segundos",
+    "Vale guardado en IndexedDB sin POST",
+    "F5 offline: estación, pestañas y cola recuperadas",
+    "Sincronización automática: cola vacía y vale persistido en servidor"
+  ],
+  "errors": [],
+  "posts": [],
+  "notes": [],
+  "queue": [
+    {
+      "key": "d9da5076-3765-42bb-9fad-0518cf03c01e",
+      "kind": "vale",
+      "payload": {
+        "customerId": "f45daee0-1a7c-4657-bf5c-f9a61e8ee5bd",
+        "productId": "edf626c6-0b59-4051-ba18-46495c4b9953",
+        "liters": 3,
+        "vehicleId": "187284b1-f231-4c7c-85b4-ba51d122bfb6",
+        "driverId": "392288ad-2ee7-4401-b520-68c1169cb0cb",
+        "plate": "AE123BC",
+        "partyName": "Transportes del Litoral SA",
+        "issuedOn": "2026-10-20",
+        "clientTotalCents": 360000,
+        "lines": [
+          {
+            "description": "Nafta súper",
+            "quantity": 3,
+            "totalCents": 360000
+          }
+        ]
+      },
+      "createdAt": "2026-10-21T00:13:25.195Z",
+      "owner": "bc5aa408-6cfe-4049-b34c-6b415cf1d903:9652f4ef-ad32-4cd2-9181-4babef351acd"
+    }
+  ],
+  "provisionalText": "Volver a la estación\n\nSIN VALIDEZ FISCAL\n\nComprobante provisorio\n\nPROV-D9DA · 20/10/2026\n\nTransportes del Litoral SA\n\nDetalle\tCant.\tTotal\nNafta súper\t3\t$ 3.600,00\n\nTotal\n$ 3.600,00\n\nProvisorio. No tiene CAE ni número fiscal. Se numera cuando vuelve la conexión.",
+  "provisionalFont": "\"Segoe UI\", Arial, Helvetica, sans-serif",
+  "provisionalOK": true,
+  "localVisibleAfterReturn": 1,
+  "localVisibleAfterReload": 1,
+  "offlineBannerTransitions": [],
+  "syncMs": 1020,
+  "queueAfter": [],
+  "vouchersBefore": 5,
+  "vouchersAfter": 6,
+  "persisted": true
+}

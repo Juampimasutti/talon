@@ -1,0 +1,9 @@
+{
+  "cashEquivalentToPreviousQuery": true,
+  "pricesChecked": 8,
+  "withoutListPricesNull": true,
+  "configLabels": true,
+  "accountsSummary": true,
+  "externalRequests": [],
+  "fontRequests": []
+}

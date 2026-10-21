@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { holdSyncUntilOnline, mayPostSync, releaseSyncHold, submitQueued, watchSync } from "./submit";
+import { cacheReference, setOfflineScope, holdSyncUntilOnline, pingHealth, precacheShell, mayPostSync, releaseSyncHold, submitQueued, watchSync } from "./submit";
 
 vi.mock("./idb", () => ({
   putOp: vi.fn(async () => {}),
@@ -11,6 +11,8 @@ vi.mock("./idb", () => ({
   deleteConflict: vi.fn(async () => {}),
   putConflict: vi.fn(async () => {}),
 }));
+
+import { putKv } from "./idb";
 
 type Listener = () => void;
 
@@ -76,6 +78,46 @@ afterEach(() => {
 });
 
 describe("sync offline", () => {
+  it("comparte pings concurrentes sin retener resultados viejos", async () => {
+    let finish!: (value: { ok: boolean }) => void;
+    const fetchMock = vi.fn(() => new Promise<{ ok: boolean }>((resolve) => { finish = resolve; }));
+    vi.stubGlobal("fetch", fetchMock);
+    const first = pingHealth();
+    const second = pingHealth();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    finish({ ok: true });
+    expect(await first).toBe(true);
+    expect(await second).toBe(true);
+    const third = pingHealth();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    finish({ ok: false });
+    expect(await third).toBe(false);
+  });
+
+  it("no pide manifiestos de producción en desarrollo", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      await precacheShell();
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally { vi.unstubAllEnvs(); }
+  });
+
+  it("descarta una referencia que termina de cargar después de cambiar de empresa", async () => {
+    installBrowser();
+    vi.mocked(putKv).mockClear();
+    let finish!: (response: Response) => void;
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>((resolve) => { finish = resolve; })));
+    setOfflineScope("user", "company-a");
+    const pending = cacheReference(true);
+    setOfflineScope("user", "company-b");
+    finish(Response.json({ ok: true, data: { customers: ["company-a"] } }));
+    await pending;
+    expect(putKv).not.toHaveBeenCalled();
+    setOfflineScope(null, null);
+  });
+
   it("no postea si navigator.onLine es false o el backoff está en pausa", () => {
     expect(mayPostSync(false, false)).toBe(false);
     expect(mayPostSync(true, true)).toBe(false);

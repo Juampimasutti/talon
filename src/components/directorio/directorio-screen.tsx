@@ -1,7 +1,7 @@
 "use client";
 
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { ApiError, apiGet, apiSend } from "@/lib/api/client";
@@ -107,7 +107,7 @@ export function DirectorioScreen({ kind }: { kind: "clientes" | "proveedores" })
     setOpen(true);
   }
 
-  function openEdit(row: Party) {
+  const openEdit = useCallback((row: Party) => {
     setEditing(row);
     setForm({
       ...empty,
@@ -130,7 +130,7 @@ export function DirectorioScreen({ kind }: { kind: "clientes" | "proveedores" })
       contact: row.contact ?? "",
     });
     setOpen(true);
-  }
+  }, []);
 
   async function save(event: React.FormEvent) {
     event.preventDefault();

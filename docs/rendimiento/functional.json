@@ -1,0 +1,22 @@
+{
+  "checks": [
+    "Laura comercial: sin peticiones de estación",
+    "Validación de venta incompleta",
+    "Venta contado por UI + F2/Control+Enter: persistencia, stock -1 y caja +total",
+    "Impresión de venta demo en PDF, sin CAE",
+    "Encabezados Total y Estado separados al extraer texto",
+    "1440/390/320: tablero, clientes, venta y caja sin overflow de página",
+    "Salir y selector de empresa visibles en Caja larga",
+    "Mostrador: API de proveedores devuelve 403 esperado"
+  ],
+  "errors": [],
+  "failed": [],
+  "stationRequests": [],
+  "sale": {
+    "id": "3f6bf573-0cf5-4228-9b65-1edfd80e184d",
+    "totalCents": 45308,
+    "stockBefore": 102,
+    "stockAfter": 101,
+    "cashDelta": 45308
+  }
+}

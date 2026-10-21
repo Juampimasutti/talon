@@ -1,4 +1,4 @@
-import { ApiError, loadSession } from "@/lib/api/client";
+import { ApiError, apiGet, loadSession } from "@/lib/api/client";
 import { estacionPrecachePaths, shouldCacheDocument, type SessionLike } from "./shell-cache";
 import { opsForScope, scopeKey, sortQueue, provisionalReceipt, reuseKey, type OpKind, type QueuedOp } from "./engine";
 import { deleteConflict, deleteOp, getKv, listConflicts, listOps, putConflict, putKv, putOp } from "./idb";
@@ -163,6 +163,8 @@ let precacheFlight: Promise<void> | null = null;
 
 /** Guarda chunks ya pedidos y, si hay permiso, los datos de la estación. No guarda HTML del overlay. */
 export function precacheShell(session: SessionLike | null = null) {
+  // Development chunks and the production offline shell are different artifacts.
+  if (process.env.NODE_ENV !== "production") return Promise.resolve();
   if (typeof window === "undefined" || !("caches" in window)) return Promise.resolve();
   if (navigator.onLine === false) return Promise.resolve();
   if (precacheFlight) return precacheFlight;
@@ -195,7 +197,10 @@ async function runPrecache(session: SessionLike | null) {
   await Promise.all([...urls].map(async (url) => {
     if (precacheBlocked.has(url)) return;
     try {
-      const response = await fetch(url);
+      if (url.startsWith("/_next/static/") && await cache.match(url)) return;
+      const response = url.startsWith("/api/")
+        ? Response.json({ ok: true, data: await apiGet(url) })
+        : await fetch(url);
       if (response.status >= 400 && response.status < 500) {
         precacheBlocked.add(url);
         return;
@@ -218,13 +223,14 @@ async function runPrecache(session: SessionLike | null) {
 }
 
 /** Ping liviano. No abre sesión ni manda la cola. */
-export async function pingHealth(): Promise<boolean> {
-  try {
-    const response = await fetch("/api/health", { method: "GET", cache: "no-store", headers: { accept: "application/json" } });
-    return response.ok;
-  } catch {
-    return false;
-  }
+let healthFlight: Promise<boolean> | null = null;
+
+export function pingHealth(): Promise<boolean> {
+  if (healthFlight) return healthFlight;
+  healthFlight = fetch("/api/health", { method: "GET", cache: "no-store", headers: { accept: "application/json" } })
+    .then((response) => response.ok, () => false)
+    .finally(() => { healthFlight = null; });
+  return healthFlight;
 }
 
 /** La espera crece y se queda en el tope. No se abandona la cola. */
@@ -547,22 +553,23 @@ export async function reviewItems() {
   return opsForScope(await listConflicts(), currentScope);
 }
 
-let referenceFlight: Promise<void> | null = null;
+const referenceFlights = new Map<string, Promise<void>>();
 
-export function cacheReference(force = false) {
-  if (referenceFlight) return referenceFlight;
-  referenceFlight = (async () => {
-    try {
-      if (!force && currentScope && (await getKv(`referencia:${currentScope}`))) return;
-      const response = await fetch("/api/sync/referencia", { headers: { accept: "application/json" } });
-      if (!response.ok) return;
-      const body = (await response.json()) as { data?: unknown };
-      if (body.data && currentScope) await putKv(`referencia:${currentScope}`, body.data);
-    } finally {
-      referenceFlight = null;
-    }
-  })();
-  return referenceFlight;
+export function cacheReference(force = false): Promise<void> {
+  const scope = currentScope;
+  if (!scope) return Promise.resolve();
+  const existing = referenceFlights.get(scope);
+  if (existing) return existing;
+  const flight = (async () => {
+    if (!force && await getKv(`referencia:${scope}`)) return;
+    if (scope !== currentScope) return;
+    const data = await apiGet("/api/sync/referencia", { fresh: force });
+    if (data && scope === currentScope) await putKv(`referencia:${scope}`, data);
+  })().finally(() => {
+    if (referenceFlights.get(scope) === flight) referenceFlights.delete(scope);
+  });
+  referenceFlights.set(scope, flight);
+  return flight;
 }
 
 export async function discardReview(key: string) {

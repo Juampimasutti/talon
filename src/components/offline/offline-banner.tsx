@@ -138,7 +138,7 @@ export function OfflineBanner() {
       if (!stop) await counts();
       return mode;
     });
-    if ("serviceWorker" in navigator) {
+    if (process.env.NODE_ENV === "production" && "serviceWorker" in navigator) {
       (window as Window & { precacheShell?: () => Promise<void> }).precacheShell = precacheShell;
       void navigator.serviceWorker.register("/sw.js").catch(() => undefined);
     }

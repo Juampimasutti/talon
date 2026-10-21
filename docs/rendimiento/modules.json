@@ -1,0 +1,24 @@
+[
+  {
+    "file": "src/components/estacion/estacion-screen.tsx",
+    "before": {
+      "initialGzip": 75213,
+      "chunks": 3
+    },
+    "after": {
+      "initialGzip": 73722,
+      "chunks": 6
+    }
+  },
+  {
+    "file": "src/components/documentos/imprimir-screen.tsx",
+    "before": {
+      "initialGzip": 16786,
+      "chunks": 1
+    },
+    "after": {
+      "initialGzip": 7515,
+      "chunks": 3
+    }
+  }
+]

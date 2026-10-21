@@ -1,0 +1,72 @@
+{
+  "cashMs": {
+    "beforeMedian": 1459.461,
+    "afterMedian": 3.261,
+    "syntheticMovements": 5000,
+    "resultsEqual": true,
+    "fixtureRolledBack": true
+  },
+  "priceRows": {
+    "priceRowsBefore": 5720,
+    "productRows": 8,
+    "priceRowsAfter": 8
+  },
+  "images": [
+    {
+      "file": "public/marca/icon-192.png",
+      "before": 2822,
+      "after": 2452,
+      "identicalPixels": true
+    },
+    {
+      "file": "public/marca/icon-512.png",
+      "before": 11041,
+      "after": 7064,
+      "identicalPixels": true
+    }
+  ],
+  "moduleInitialGzip": [
+    {
+      "file": "src/components/estacion/estacion-screen.tsx",
+      "before": {
+        "initialGzip": 75213,
+        "chunks": 3
+      },
+      "after": {
+        "initialGzip": 73722,
+        "chunks": 6
+      }
+    },
+    {
+      "file": "src/components/documentos/imprimir-screen.tsx",
+      "before": {
+        "initialGzip": 16786,
+        "chunks": 1
+      },
+      "after": {
+        "initialGzip": 7515,
+        "chunks": 3
+      }
+    }
+  ],
+  "renderControl": {
+    "initialCellRenders": 2,
+    "twoStableUpdates": 2,
+    "twoUnstableCallbackUpdates": 6
+  },
+  "tests": {
+    "files": 23,
+    "passed": 88,
+    "skipped": 0
+  },
+  "lint": {
+    "errors": 0,
+    "warnings": 4
+  },
+  "frameworkExcludedFromModuleSizes": true,
+  "dev": {
+    "manifestRequests": 0,
+    "serviceWorkers": 0,
+    "failures": []
+  }
+}

@@ -14,7 +14,11 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Equipos } from "@/components/estacion/equipos-screen";
+import dynamic from "next/dynamic";
+
+const Equipos = dynamic(() => import("@/components/estacion/equipos-screen").then((mod) => mod.Equipos), {
+  loading: () => <p className="p-4 text-sm">Cargando equipos…</p>,
+});
 
 type Product = { id: string; name: string; code: string; unit: string; iva_rate_bps: number; priceCents: number | null; taxes: { code: string; name: string; centsPerUnit: number; inVatBase: boolean; treatment: "interno" | "no_gravado" }[] };
 type Nozzle = { id: string; number: number; pump_name: string; product_id: string; product_name: string; tank_name: string; last_closing: string | null };

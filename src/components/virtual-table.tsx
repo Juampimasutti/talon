@@ -39,7 +39,7 @@ function RowInner<T>({ row, columns, template, start, size, onClick }: RowProps<
 
 const Row = memo(RowInner) as typeof RowInner;
 
-export function VirtualTable<T>({
+function VirtualTableInner<T>({
   rows,
   columns,
   template,
@@ -98,3 +98,5 @@ export function VirtualTable<T>({
     </div>
   );
 }
+
+export const VirtualTable = memo(VirtualTableInner) as typeof VirtualTableInner;

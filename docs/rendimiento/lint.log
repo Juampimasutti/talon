@@ -1,0 +1,46 @@
+
+> talon@0.1.0 lint
+> eslint
+
+
+/workspace/talon/src/components/datos/datos-screen.tsx
+  143:23  warning  Compilation Skipped: Use of incompatible library
+
+This API returns functions which cannot be memoized without leading to stale UI. To prevent this, by default React Compiler will skip memoizing this component/hook. However, you may see issues if values from this API are passed to other components/hooks that are memoized.
+
+/workspace/talon/src/components/datos/datos-screen.tsx:143:23
+  141 |
+  142 |   const parentRef = useRef<HTMLDivElement>(null);
+> 143 |   const virtualizer = useVirtualizer({
+      |                       ^^^^^^^^^^^^^^ TanStack Virtual's `useVirtualizer()` API returns functions that cannot be memoized safely
+  144 |     count: preview.length,
+  145 |     getScrollElement: () => parentRef.current,
+  146 |     estimateSize: () => 40,  react-hooks/incompatible-library
+
+/workspace/talon/src/components/ingreso/ingreso-screen.tsx
+  49:7  warning  Do not use `window.location.assign()` to navigate to internal Next.js pages. Use `redirect()` in the render phase, or `useRouter().push()` in Client Components' event handlers instead. See: https://nextjs.org/docs/messages/no-location-assign-relative-destination  @next/next/no-location-assign-relative-destination
+
+/workspace/talon/src/components/shell/panel-shell.tsx
+  131:5  warning  Do not use `window.location.assign()` to navigate to internal Next.js pages. Use `redirect()` in the render phase, or `useRouter().push()` in Client Components' event handlers instead. See: https://nextjs.org/docs/messages/no-location-assign-relative-destination  @next/next/no-location-assign-relative-destination
+
+/workspace/talon/src/components/virtual-table.tsx
+  58:23  warning  Compilation Skipped: Use of incompatible library
+
+This API returns functions which cannot be memoized without leading to stale UI. To prevent this, by default React Compiler will skip memoizing this component/hook. However, you may see issues if values from this API are passed to other components/hooks that are memoized.
+
+/workspace/talon/src/components/virtual-table.tsx:58:23
+  56 | }) {
+  57 |   const parentRef = useRef<HTMLDivElement>(null);
+> 58 |   const virtualizer = useVirtualizer({
+     |                       ^^^^^^^^^^^^^^ TanStack Virtual's `useVirtualizer()` API returns functions that cannot be memoized safely
+  59 |     count: rows.length,
+  60 |     getScrollElement: () => parentRef.current,
+  61 |     estimateSize: () => rowHeight,  react-hooks/incompatible-library
+
+✖ 4 problems (0 errors, 4 warnings)
+
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

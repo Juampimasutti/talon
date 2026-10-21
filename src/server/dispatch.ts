@@ -448,16 +448,19 @@ async function articles(method: string, id: string | undefined, req: Request, ur
         exact && page.q ? eq(products.sku, page.q.trim()) : undefined,
         !exact && term ? or(ilike(products.name, term), ilike(products.sku, term), ilike(products.barcode, term)) : undefined,
       );
-      const [items, countRows, prices] = await Promise.all([
-        tx.select().from(products).where(where).orderBy(asc(products.name)).limit(page.pageSize).offset(page.offset),
+      const [items, countRows] = await Promise.all([
+        tx.select({ product: products, listPriceCents: productPrices.priceCents })
+          .from(products)
+          .leftJoin(productPrices, and(
+            eq(productPrices.productId, products.id),
+            eq(productPrices.companyId, auth.company.companyId),
+            listId ? eq(productPrices.priceListId, listId) : sql`false`,
+          ))
+          .where(where).orderBy(asc(products.name)).limit(page.pageSize).offset(page.offset),
         tx.select({ total: sql<number>`count(*)::int` }).from(products).where(where),
-        listId
-          ? tx.select().from(productPrices).where(eq(productPrices.priceListId, listId))
-          : Promise.resolve([]),
       ]);
-      const priceMap = new Map(prices.map((price) => [price.productId, price.priceCents]));
       return ok({
-        items: items.map((item) => ({ ...item, listPriceCents: priceMap.get(item.id) ?? null })),
+        items: items.map(({ product, listPriceCents }) => ({ ...product, listPriceCents })),
         total: Number(countRows[0]?.total ?? 0),
         page: page.page,
         pageSize: page.pageSize,
@@ -748,17 +751,21 @@ async function caja(method: string, action: string | undefined, req: Request, ur
           .limit(page.pageSize)
           .offset(page.offset),
         tx.execute<{ id: string; balance: string; session_balance: string }>(sql`
+          with openings as (
+            select cash_account_id, max(created_at) as opened_at
+            from cash_movements
+            where company_id = ${auth.company.companyId} and description = 'Saldo de apertura'
+            group by cash_account_id
+          )
           select a.id::text,
             coalesce(sum(case when m.direction = 'in' then m.amount_cents else -m.amount_cents end), 0)::text as balance,
             coalesce(sum(case when m.direction = 'in' then m.amount_cents else -m.amount_cents end)
-              filter (where m.created_at >= coalesce(
-                (select max(o.created_at) from cash_movements o where o.cash_account_id = a.id and o.description = 'Saldo de apertura'),
-                '-infinity'::timestamptz
-              )), 0)::text as session_balance
+              filter (where m.created_at >= coalesce(o.opened_at, '-infinity'::timestamptz)), 0)::text as session_balance
           from cash_accounts a
           left join cash_movements m on m.cash_account_id = a.id
+          left join openings o on o.cash_account_id = a.id
           where a.company_id = ${auth.company.companyId}
-          group by a.id
+          group by a.id, o.opened_at
         `),
       ]);
       return ok({

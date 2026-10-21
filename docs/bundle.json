@@ -1,65 +1,202 @@
 {
-  "monolithGzip": 87384,
-  "monolithBytes": 271322,
-  "largestScreen": "src/components/directorio/directorio-screen.tsx",
-  "largestGzip": 66439,
-  "tableroGzip": 7095,
+  "measurement": "Esbuild module graph, React/Next external. Initial includes static shared chunks; total includes deferred imports. This is not the full Next.js network payload. The monolith is a synthetic comparison.",
+  "monolithGzip": 108248,
+  "monolithBytes": 340101,
+  "largestScreen": "src/components/estacion/estacion-screen.tsx",
+  "largestGzip": 73717,
+  "tableroGzip": 8391,
   "parts": [
     {
-      "screen": "directorio-screen.tsx",
-      "gzip": 66439
+      "screen": "src/components/estacion/estacion-screen.tsx",
+      "initial": {
+        "bytes": 215808,
+        "gzip": 73717
+      },
+      "total": {
+        "bytes": 242804,
+        "gzip": 81445
+      },
+      "chunks": 6
     },
     {
-      "screen": "articulos-screen.tsx",
-      "gzip": 65629
+      "screen": "src/components/directorio/directorio-screen.tsx",
+      "initial": {
+        "bytes": 203228,
+        "gzip": 67806
+      },
+      "total": {
+        "bytes": 203228,
+        "gzip": 67806
+      },
+      "chunks": 1
     },
     {
-      "screen": "configuracion-screen.tsx",
-      "gzip": 44281
+      "screen": "src/components/articulos/articulos-screen.tsx",
+      "initial": {
+        "bytes": 200669,
+        "gzip": 67099
+      },
+      "total": {
+        "bytes": 200669,
+        "gzip": 67099
+      },
+      "chunks": 1
     },
     {
-      "screen": "lista-screen.tsx",
-      "gzip": 40726
+      "screen": "src/components/documentos/editor-screen.tsx",
+      "initial": {
+        "bytes": 176033,
+        "gzip": 59963
+      },
+      "total": {
+        "bytes": 176033,
+        "gzip": 59963
+      },
+      "chunks": 1
     },
     {
-      "screen": "editor-screen.tsx",
-      "gzip": 36342
+      "screen": "src/components/caja/caja-screen.tsx",
+      "initial": {
+        "bytes": 167559,
+        "gzip": 56940
+      },
+      "total": {
+        "bytes": 167559,
+        "gzip": 56940
+      },
+      "chunks": 1
     },
     {
-      "screen": "stock-screen.tsx",
-      "gzip": 34565
+      "screen": "src/components/documentos/detalle-screen.tsx",
+      "initial": {
+        "bytes": 167208,
+        "gzip": 56929
+      },
+      "total": {
+        "bytes": 167208,
+        "gzip": 56929
+      },
+      "chunks": 1
     },
     {
-      "screen": "cuentas-screen.tsx",
-      "gzip": 34443
+      "screen": "src/components/configuracion/configuracion-screen.tsx",
+      "initial": {
+        "bytes": 135093,
+        "gzip": 45673
+      },
+      "total": {
+        "bytes": 135093,
+        "gzip": 45673
+      },
+      "chunks": 1
     },
     {
-      "screen": "caja-screen.tsx",
-      "gzip": 34267
+      "screen": "src/components/documentos/lista-screen.tsx",
+      "initial": {
+        "bytes": 118528,
+        "gzip": 41898
+      },
+      "total": {
+        "bytes": 118528,
+        "gzip": 41898
+      },
+      "chunks": 1
     },
     {
-      "screen": "comprobantes-screen.tsx",
-      "gzip": 34051
+      "screen": "src/components/cuentas/cuentas-screen.tsx",
+      "initial": {
+        "bytes": 104371,
+        "gzip": 36142
+      },
+      "total": {
+        "bytes": 104371,
+        "gzip": 36142
+      },
+      "chunks": 1
     },
     {
-      "screen": "ingreso-screen.tsx",
-      "gzip": 29107
+      "screen": "src/components/stock/stock-screen.tsx",
+      "initial": {
+        "bytes": 103586,
+        "gzip": 35813
+      },
+      "total": {
+        "bytes": 103586,
+        "gzip": 35813
+      },
+      "chunks": 1
     },
     {
-      "screen": "detalle-screen.tsx",
-      "gzip": 27374
+      "screen": "src/components/comprobantes/comprobantes-screen.tsx",
+      "initial": {
+        "bytes": 101861,
+        "gzip": 35206
+      },
+      "total": {
+        "bytes": 101861,
+        "gzip": 35206
+      },
+      "chunks": 1
     },
     {
-      "screen": "tablero-screen.tsx",
-      "gzip": 7095
+      "screen": "src/components/contabilidad/contabilidad-screen.tsx",
+      "initial": {
+        "bytes": 101798,
+        "gzip": 35087
+      },
+      "total": {
+        "bytes": 101798,
+        "gzip": 35087
+      },
+      "chunks": 1
     },
     {
-      "screen": "auditoria-screen.tsx",
-      "gzip": 5123
+      "screen": "src/components/ingreso/ingreso-screen.tsx",
+      "initial": {
+        "bytes": 83453,
+        "gzip": 29203
+      },
+      "total": {
+        "bytes": 83453,
+        "gzip": 29203
+      },
+      "chunks": 1
     },
     {
-      "screen": "contabilidad-screen.tsx",
-      "gzip": 5017
+      "screen": "src/components/auditoria/auditoria-screen.tsx",
+      "initial": {
+        "bytes": 76069,
+        "gzip": 28930
+      },
+      "total": {
+        "bytes": 76069,
+        "gzip": 28930
+      },
+      "chunks": 1
+    },
+    {
+      "screen": "src/components/tablero/tablero-screen.tsx",
+      "initial": {
+        "bytes": 24823,
+        "gzip": 8391
+      },
+      "total": {
+        "bytes": 24823,
+        "gzip": 8391
+      },
+      "chunks": 1
+    },
+    {
+      "screen": "src/components/documentos/imprimir-screen.tsx",
+      "initial": {
+        "bytes": 20234,
+        "gzip": 7510
+      },
+      "total": {
+        "bytes": 44839,
+        "gzip": 16972
+      },
+      "chunks": 3
     }
   ]
 }

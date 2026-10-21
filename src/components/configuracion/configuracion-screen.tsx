@@ -100,9 +100,15 @@ export function ConfiguracionScreen() {
         </TabsList>
         <TabsContent value="empresa">
           <form noValidate onSubmit={saveCompany} className="mt-4 grid max-w-xl gap-3">
-            <Input value={company.name} onChange={(event) => setCompany({ ...company, name: event.target.value })} disabled={!editable} />
-            <Input value={company.legalName} onChange={(event) => setCompany({ ...company, legalName: event.target.value })} disabled={!editable} />
-            <Input value={company.city ?? ""} onChange={(event) => setCompany({ ...company, city: event.target.value })} disabled={!editable} />
+            <label className="grid gap-1 text-sm">Nombre comercial
+              <Input value={company.name} onChange={(event) => setCompany({ ...company, name: event.target.value })} disabled={!editable} />
+            </label>
+            <label className="grid gap-1 text-sm">Razón social
+              <Input value={company.legalName} onChange={(event) => setCompany({ ...company, legalName: event.target.value })} disabled={!editable} />
+            </label>
+            <label className="grid gap-1 text-sm">Localidad
+              <Input value={company.city ?? ""} onChange={(event) => setCompany({ ...company, city: event.target.value })} disabled={!editable} />
+            </label>
             <label className="text-sm">
               Punto de venta
               <Input type="number" value={company.pointOfSale} onChange={(event) => setCompany({ ...company, pointOfSale: Number(event.target.value) })} disabled={!editable} />

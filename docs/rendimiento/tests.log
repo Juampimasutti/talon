@@ -1,0 +1,53 @@
+
+> talon@0.1.0 test
+> vitest run
+
+
+ RUN  v3.2.7 /workspace/talon
+
+stdout | src/lib/db/seed.integration.test.ts > seed en base limpia > aplica las migraciones y deja la isla 1 con número
+{
+  severity_local: 'NOTICE',
+  severity: 'NOTICE',
+  code: '00000',
+  message: 'database "talon_seed_check" does not exist, skipping',
+  file: 'dbcommands.c',
+  line: '1620',
+  routine: 'dropdb'
+}
+
+ ✓ src/lib/db/seed.integration.test.ts (1 test) 3358ms
+   ✓ seed en base limpia > aplica las migraciones y deja la isla 1 con número  3322ms
+ ✓ src/lib/db/rls.integration.test.ts (1 test) 280ms
+ ✓ src/lib/auth/session.test.ts (2 tests) 259ms
+ ✓ src/lib/io/io.test.ts (7 tests) 133ms
+ ✓ src/lib/api/inflight.test.ts (1 test) 17ms
+ ✓ src/lib/auth/permissions.test.ts (7 tests) 11ms
+ ✓ src/lib/offline/submit.test.ts (9 tests) 10ms
+ ✓ src/lib/cuentas/aging.test.ts (2 tests) 9ms
+ ✓ src/lib/offline/engine.test.ts (9 tests) 10ms
+ ✓ src/lib/estacion/calc.test.ts (9 tests) 7ms
+ ✓ src/lib/auth/access.test.ts (5 tests) 6ms
+ ✓ src/lib/fiscal/totals.test.ts (5 tests) 5ms
+ ✓ src/lib/format.test.ts (5 tests) 6ms
+ ✓ src/lib/guards.test.ts (5 tests) 4ms
+ ✓ src/lib/api/client.test.ts (1 test) 5ms
+ ✓ src/lib/fiscal/cuit.test.ts (4 tests) 4ms
+ ✓ src/lib/offline/shell-cache.test.ts (3 tests) 4ms
+ ✓ src/lib/fiscal/letter.test.ts (4 tests) 3ms
+ ✓ src/lib/io/dbf.test.ts (1 test) 2ms
+ ✓ src/lib/ui/toast-once.test.ts (1 test) 2ms
+ ✓ src/components/virtual-table.test.tsx (2 tests) 35ms
+ ✓ src/lib/ui/render-budget.test.tsx (3 tests) 24ms
+ ✓ src/components/documentos/imprimir-screen.test.tsx (1 test) 36ms
+
+ Test Files  23 passed (23)
+      Tests  88 passed (88)
+   Start at  00:17:00
+   Duration  9.34s (transform 394ms, setup 0ms, collect 1.08s, tests 4.23s, environment 569ms, prepare 1.06s)
+
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

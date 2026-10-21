@@ -3,7 +3,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { apiGet } from "@/lib/api/client";
 import { can, type ModuleKey } from "@/lib/auth/permissions";
 import { countNoun, fiscalNumber, formatDate, formatMoney } from "@/lib/format";
@@ -61,10 +61,11 @@ export function ListaScreen({ kind }: { kind: keyof typeof META }) {
       { key: "date", header: "Fecha", className: "hidden sm:block", cell: (row: Row) => formatDate(row.issuedOn) },
       { key: "party", header: "Razón social", className: "truncate", cell: (row: Row) => row.partyName },
       { key: "total", header: "Total", className: "text-right", cell: (row: Row) => formatMoney(row.totalCents * row.sign) },
-      { key: "status", header: "Estado", className: "hidden md:block", cell: (row: Row) => (row.status === "anulado" ? "Anulado" : "Confirmado") },
+      { key: "status", header: "Estado", className: "hidden border-l pl-4 md:block", cell: (row: Row) => (row.status === "anulado" ? "Anulado" : "Confirmado") },
     ],
     [kind],
   );
+  const openDocument = useCallback((row: Row) => router.push(`${meta.path}/${row.id}`), [router, meta.path]);
   const canCreate = me.data ? can(me.data.permissions, meta.module, "crear") : false;
 
   return (
@@ -98,7 +99,7 @@ export function ListaScreen({ kind }: { kind: keyof typeof META }) {
         rows={list.data?.items ?? []}
         columns={columns}
         template="180px 110px 1.4fr 130px 110px"
-        onRow={(row) => router.push(`${meta.path}/${row.id}`)}
+        onRow={openDocument}
         empty={list.isLoading ? "Cargando comprobantes…" : "No hay comprobantes con ese filtro."}
       />
       <div className="flex justify-end gap-2">

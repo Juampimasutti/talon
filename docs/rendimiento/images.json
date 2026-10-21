@@ -1,0 +1,14 @@
+[
+  {
+    "file": "public/marca/icon-192.png",
+    "before": 2822,
+    "after": 2452,
+    "identicalPixels": true
+  },
+  {
+    "file": "public/marca/icon-512.png",
+    "before": 11041,
+    "after": 7064,
+    "identicalPixels": true
+  }
+]

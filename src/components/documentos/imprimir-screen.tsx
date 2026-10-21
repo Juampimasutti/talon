@@ -3,8 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
-import QRCode from "qrcode";
+import { useCallback, useEffect, useState } from "react";
 import { apiGet } from "@/lib/api/client";
 import { formatDate, formatMoney, formatNumber, formatQty } from "@/lib/format";
 import { afipCodeFor, afipQrUrl } from "@/lib/fiscal/arca";
@@ -50,6 +49,8 @@ export function ImprimirScreen({ kind }: { kind: keyof typeof PATH }) {
     queryKey: ["documento", params.id],
     queryFn: () => apiGet<PrintDoc>(`/api/documentos/${params.id}`),
   });
+  const [qrReadyFor, setQrReadyFor] = useState<string | null>(null);
+  const onQrReady = useCallback((url: string) => setQrReadyFor(url), []);
   const data = document.data;
   const company = me.data?.company;
   const fiscalNumber = data && kind === "compra" && data.supplierNumber ? formatNumber(data.supplierPos ?? 0, data.supplierNumber) : data ? formatNumber(data.pointOfSale, data.number) : "";
@@ -65,10 +66,10 @@ export function ImprimirScreen({ kind }: { kind: keyof typeof PATH }) {
   }) : null;
 
   useEffect(() => {
-    if (!data || !company) return;
+    if (!data || !company || (qrUrl && qrReadyFor !== qrUrl)) return;
     const timer = window.setTimeout(() => window.print(), 250);
     return () => window.clearTimeout(timer);
-  }, [data, company]);
+  }, [data, company, qrUrl, qrReadyFor]);
 
   if (document.isLoading || me.isLoading) return <ScreenFallback label="Armando la impresión" />;
   if (!data || !company) return <p className="p-6">No pudimos abrir el comprobante.</p>;
@@ -129,7 +130,7 @@ export function ImprimirScreen({ kind }: { kind: keyof typeof PATH }) {
           <p>{data.paymentMethod === "contado" ? "Contado" : "Cuenta corriente"}</p>
           {data.cae ? <p>CAE {data.cae}{data.caeDue ? ` · vence ${formatDate(data.caeDue)}` : ""}</p> : kind === "compra" ? null : <p>CAE: {data.caeStatus === "no_electronico" ? "no electrónico" : data.caeStatus}</p>}
         </div>
-        {qrUrl ? <Qr url={qrUrl} /> : null}
+        {qrUrl ? <Qr url={qrUrl} onReady={onQrReady} /> : null}
       </footer>
     </article>
   );
@@ -145,11 +146,15 @@ function Row({ label, value }: { label: string; value: number }) {
   );
 }
 
-function Qr({ url }: { url: string }) {
+function Qr({ url, onReady }: { url: string; onReady: (url: string) => void }) {
   const [svg, setSvg] = useState("");
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
-    void QRCode.toString(url, { type: "svg", margin: 1, width: 140 }).then(setSvg).catch(() => setSvg(""));
-  }, [url]);
+    let cancelled = false;
+    void import("qrcode").then((mod) => mod.default.toString(url, { type: "svg", margin: 1, width: 140 })).then((value) => { if (!cancelled) { setSvg(value); setFailed(false); onReady(url); } }).catch(() => { if (!cancelled) { setSvg(""); setFailed(true); } });
+    return () => { cancelled = true; };
+  }, [url, onReady]);
+  if (failed) return <p role="alert" className="print:hidden">No se pudo generar el QR. Recargá el comprobante para reintentar.</p>;
   if (!svg) return null;
   return <div className="size-36" aria-label="QR del comprobante" dangerouslySetInnerHTML={{ __html: svg }} />;
 }

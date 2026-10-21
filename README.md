@@ -1,5 +1,7 @@
 # Talón
 
+Mejoras y mediciones actuales: [reporte de rendimiento](docs/reporte-rendimiento.md).
+
 Gestión comercial horizontal para Argentina. Sirve para una distribuidora, un comercio, un depósito o un estudio: cada empresa prende los módulos que usa. La interfaz está en español rioplatense.
 
 Hay dos empresas de prueba. **Distribuidora Paraná SRL** es responsable inscripto y usa ventas, compras, stock, pedidos, remitos y caja. **Costa & Asociados** es monotributo y solo factura servicios. Laura está en las dos y puede cambiar de empresa desde el menú.
@@ -168,7 +170,7 @@ Los 40.000 artículos se insertan y se borran en la misma transacción del scrip
 ### 5. Imágenes, fuentes y scripts
 
 - La ilustración del ingreso es un WebP de **13,6 KB** (960×1280, calidad 68), generado desde un SVG con `sharp`. `next/image` puede servirla en AVIF o WebP. En el celular no se pide: el panel está oculto.
-- Las fuentes son Source Sans 3 (pesos 400 y 600) y Source Serif 4 (peso 600), subconjunto latino, `display: swap`, bajadas en el build por `next/font`. No hay un `<link>` a Google.
+- El rediseño actual usa Segoe UI, Arial o Helvetica del sistema; no descarga fuentes remotas. Las mediciones históricas de esta sección corresponden a la versión anterior: el reporte enlazado al inicio documenta el estado actual.
 - No hay analytics ni otro script de terceros. Los íconos entran en el bundle de la ruta que los usa.
 
 ## Qué quedó pendiente

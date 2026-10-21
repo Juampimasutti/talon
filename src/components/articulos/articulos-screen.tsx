@@ -1,7 +1,7 @@
 "use client";
 
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { apiGet, apiSend } from "@/lib/api/client";
 import { can } from "@/lib/auth/permissions";
@@ -103,6 +103,21 @@ export function ArticulosScreen() {
 
   const canCreate = me.data ? can(me.data.permissions, "articulos", "crear") : false;
 
+  const editArticle = useCallback((row: Product) => {
+    setEditingId(row.id);
+    setForm({
+      sku: row.sku,
+      name: row.name,
+      cost: String(row.costCents / 100),
+      price: row.listPriceCents == null ? "" : String(row.listPriceCents / 100),
+      iva: String(row.ivaRateBps),
+      categoryId: row.categoryId ?? "",
+      tracksStock: row.tracksStock,
+      minStock: String(row.minStock),
+    });
+    setOpen(true);
+  }, []);
+
   return (
     <div className="grid gap-4 p-4 md:p-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -138,20 +153,7 @@ export function ArticulosScreen() {
         columns={columns}
         template="120px 1.6fr 70px 120px 120px 70px"
         empty={list.isLoading ? "Cargando artículos…" : "Ningún artículo coincide."}
-        onRow={me.data && can(me.data.permissions, "articulos", "editar") ? (row) => {
-          setEditingId(row.id);
-          setForm({
-            sku: row.sku,
-            name: row.name,
-            cost: String(row.costCents / 100),
-            price: row.listPriceCents == null ? "" : String(row.listPriceCents / 100),
-            iva: String(row.ivaRateBps),
-            categoryId: row.categoryId ?? "",
-            tracksStock: row.tracksStock,
-            minStock: String(row.minStock),
-          });
-          setOpen(true);
-        } : undefined}
+        onRow={me.data && can(me.data.permissions, "articulos", "editar") ? editArticle : undefined}
       />
       <div className="flex justify-end gap-2">
         <Button variant="outline" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>

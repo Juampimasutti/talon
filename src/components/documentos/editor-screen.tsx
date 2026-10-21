@@ -433,8 +433,8 @@ export function EditorScreen({ kind }: { kind: keyof typeof META }) {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-[1fr_280px]">
-        <div className="grid gap-3">
+      <div className="grid items-start gap-4 md:grid-cols-[1fr_280px]">
+        <div className="grid content-start gap-3">
           {selectedType?.movesVat || kind === "pedido" || kind === "remito" ? (
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="grid gap-1 text-sm">
