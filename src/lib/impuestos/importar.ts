@@ -24,7 +24,7 @@ export async function importarMisComprobantes(tx:Tx,context:ImportContext,file:B
       if(row.docTipo!==99 && row.docNro!=="0"){
         const [counterpart]=await tx.execute<{id:string}>(sql`insert into imp_contrapartes(company_id,doc_tipo,doc_nro,denominacion,condicion_a_revisar)
           values(${context.companyId},${row.docTipo},${row.docNro},${row.denominacion},true)
-          on conflict(company_id,doc_tipo,doc_nro) do update set denominacion=excluded.denominacion returning id`);
+          on conflict(company_id,empresa_cliente_id,doc_tipo,doc_nro) do update set denominacion=excluded.denominacion returning id`);
         counterpartId=counterpart.id;
         if(crearEnTalon){
           const {taxCondition,revisar}=condicionDesdeComprobante({libro:row.libro,letra:letras.get(row.tipoCbte)??null,docTipo:row.docTipo});

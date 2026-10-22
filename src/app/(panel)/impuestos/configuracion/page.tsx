@@ -1,1 +1,1 @@
-export default function Page(){return <main className="space-y-3 p-4 sm:p-6"><h1 className="text-xl font-semibold">Configuración de impuestos</h1><p className="text-sm text-muted-foreground">Tolerancia predeterminada: $0,05. La creación de contrapartes en Talón permanece apagada por defecto.</p></main>}
+import { redirect } from "next/navigation"; export default function Page(){redirect("/impuestos")}

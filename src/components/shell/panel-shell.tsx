@@ -1,6 +1,6 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BookOpen,
   Calculator,
@@ -22,6 +22,7 @@ import {
   Users,
   Wallet,
   Warehouse,
+  Plus,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -30,6 +31,8 @@ import { ApiError, apiSend, clearSessionCache, type Me } from "@/lib/api/client"
 import { sectionAccess } from "@/lib/auth/access";
 import { visibleModules } from "@/lib/auth/permissions";
 import { taxConditionLabel } from "@/lib/fiscal/labels";
+import { formatCuit } from "@/lib/fiscal/cuit";
+import type { EmpresaImpositiva } from "@/components/impuestos/empresa-types";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ScreenFallback } from "@/components/screen-fallback";
@@ -144,6 +147,7 @@ export function PanelShell({ children }: { children: React.ReactNode }) {
         const href = HREF[item.key] ?? "/tablero";
         const Icon = ICONS[item.key] ?? FileText;
         const active = pathname === href || pathname.startsWith(`${href}/`);
+        if(item.key==="impuestos") return <ImpuestosTree key={item.key} pathname={pathname} close={()=>setOpen(false)}/>;
         return (
           <Link
             key={item.key}
@@ -226,6 +230,18 @@ export function PanelShell({ children }: { children: React.ReactNode }) {
       </div>
     </div>
   );
+}
+
+function ImpuestosTree({pathname,close}:{pathname:string;close:()=>void}){
+  const query=useQuery({queryKey:["impuestos-empresas"],queryFn:()=>apiSend<{items:EmpresaImpositiva[]}>("/api/impuestos/empresas","GET")});
+  const active=pathname==="/impuestos"||pathname.startsWith("/impuestos/");
+  return <details className="group" open={active||undefined}>
+    <summary className={`talon-nav-link cursor-pointer list-none ${active?"bg-sidebar-accent text-sidebar-accent-foreground":""}`}><Calculator className="size-4"/>Impuestos</summary>
+    <div className="ml-5 grid gap-0.5 border-l border-sidebar-border pl-2">
+      {(query.data?.items??[]).map(empresa=><Link key={empresa.id} href={`/impuestos/empresas/${empresa.id}`} onClick={close} className="rounded px-2 py-1.5 text-xs hover:bg-sidebar-accent" title={`${empresa.nombre} · ${formatCuit(empresa.cuit)}`}><span className="block truncate">{empresa.nombre}</span><span className="block truncate text-[10px] opacity-70">{formatCuit(empresa.cuit)}</span></Link>)}
+      <Link href="/impuestos/empresas/nueva" onClick={close} className="flex items-center gap-1 rounded px-2 py-1.5 text-xs hover:bg-sidebar-accent"><Plus className="size-3"/>Agregar empresa</Link>
+    </div>
+  </details>;
 }
 
 function Brand({ compact = false }: { compact?: boolean }) {

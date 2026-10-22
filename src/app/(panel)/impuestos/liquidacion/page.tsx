@@ -1,1 +1,1 @@
-import { LiquidacionScreen } from "@/components/impuestos/liquidacion-screen"; export default function Page(){return <LiquidacionScreen/>}
+import { redirect } from "next/navigation"; export default function Page(){redirect("/impuestos")}

@@ -133,9 +133,9 @@ describe.skipIf(!enabled)("impuestos RLS", () => {
     })).rejects.toMatchObject({code:"42501"});
   });
 
-  it("incluye las 12 tablas tenant de impuestos en respaldo y restauración dinámica", async () => {
+  it("incluye las 13 tablas tenant de impuestos en respaldo y restauración dinámica", async () => {
     const [snapshot]=await admin!`select company_snapshot(${companyA}) data`;
-    const tenantTables=["imp_config","imp_puntos_venta","imp_actividades","imp_contrapartes","imp_mapeo_tributos","imp_periodos","imp_import_jobs","imp_comprobantes","imp_comprobante_alicuotas","imp_import_rows","imp_liquidaciones","imp_liquidacion_items"];
+    const tenantTables=["imp_empresas","imp_config","imp_puntos_venta","imp_actividades","imp_contrapartes","imp_mapeo_tributos","imp_periodos","imp_import_jobs","imp_comprobantes","imp_comprobante_alicuotas","imp_import_rows","imp_liquidaciones","imp_liquidacion_items"];
     for(const table of tenantTables) expect(snapshot.data).toHaveProperty(table);
   });
 
@@ -220,5 +220,27 @@ describe.skipIf(!enabled)("impuestos RLS", () => {
     expect(back[0].enabledModules).not.toContain("impuestos");
     expect(back[0].enabledModules).toContain("ventas");
     await expect(applyCompanyMode(admin!,"estudio","no-existe")).rejects.toThrow("No encontré");
+  });
+
+  it("aísla clientes dentro del estudio y mantiene el RLS entre estudios", async () => {
+    const [first]=await admin!`select id from imp_empresas where company_id=${companyA} and activa order by created_at limit 1`;
+    const [second]=await admin!`insert into imp_empresas(company_id,nombre,razon_social,cuit,condicion_iva,created_by)
+      values(${companyA},'Cliente fiscal B','Cliente fiscal B SA','30709999995','ri',${laura}) returning id`;
+    await app!.begin(async tx=>{
+      await tx`select set_config('app.company_id',${companyA},true),set_config('app.user_id',${laura},true),set_config('app.imp_empresa_id',${first.id},true)`;
+      await tx`insert into imp_periodos(company_id,periodo) values(${companyA},'202610')`;
+      expect(await tx`select periodo from imp_periodos where periodo='202610'`).toHaveLength(1);
+    });
+    await app!.begin(async tx=>{
+      await tx`select set_config('app.company_id',${companyA},true),set_config('app.user_id',${laura},true),set_config('app.imp_empresa_id',${second.id},true)`;
+      expect(await tx`select periodo from imp_periodos where periodo='202610'`).toHaveLength(0);
+      await tx`insert into imp_periodos(company_id,periodo) values(${companyA},'202610')`;
+      expect(await tx`select periodo from imp_periodos where periodo='202610'`).toHaveLength(1);
+    });
+    const [otherStudy]=await admin!`select id from imp_empresas where company_id=${companyB} and activa limit 1`;
+    await expect(app!.begin(async tx=>{
+      await tx`select set_config('app.company_id',${companyA},true),set_config('app.user_id',${laura},true),set_config('app.imp_empresa_id',${otherStudy.id},true)`;
+      await tx`insert into imp_periodos(company_id,empresa_cliente_id,periodo) values(${companyA},${otherStudy.id},'202611')`;
+    })).rejects.toMatchObject({code:"42501"});
   });
 });

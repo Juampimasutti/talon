@@ -30,9 +30,9 @@ function urlFor(key: string, db: string) {
   return url.toString();
 }
 
-async function request(path: string, body?: unknown, expected = 200) {
+async function request(path: string, body?: unknown, expected = 200, method?: string) {
   const response = await fetch(`${base}/api/${path}`, {
-    method: body === undefined ? "GET" : "POST",
+    method: method ?? (body === undefined ? "GET" : "POST"),
     headers: { "Content-Type": "application/json", Cookie: cookie },
     body: body === undefined ? undefined : JSON.stringify(body),
     signal: AbortSignal.timeout(20_000),
@@ -121,6 +121,7 @@ async function verifyBackupRestore(backup: Record<string, unknown>) {
   const company = backup.company as { id: string };
   try {
     await sql!.begin(async (tx) => {
+      await tx`select set_config('app.lifecycle_company',${company.id},true)`;
       const actualTables = await tx<
         { name: string }[]
       >`select tablename as name from pg_tables where schemaname='public'`;
@@ -500,11 +501,12 @@ describe.skipIf(!enabled)(
       // Liquidación IVA: el saldo técnico a favor de agosto se arrastra solo a septiembre
       // y reproduce el ejemplo (saldo a pagar $ 5.050,00); el período confirmado no se recalcula.
       let nro = 0;
+      const [empresaFiscal] = await sql!`select id from imp_empresas where company_id=${estudio.id} and activa limit 1`;
       const cbte = async (libro: string, periodo: string, tipo: number, ivaCents: number, percepIvaCents = 0) => {
         nro += 1;
-        const [row] = await sql!`insert into imp_comprobantes(company_id,libro,origen,fecha_cbte,periodo,tipo_cbte,punto_venta,numero_desde,numero_hasta,doc_nro_emisor,doc_tipo,doc_nro,denominacion,moneda,percep_iva_cents,total_cents,credito_fiscal_computable_cents,created_by)
-          values(${estudio.id},${libro},'manual',${`${periodo.slice(0, 4)}-${periodo.slice(4)}-10`},${periodo},${tipo},1,${nro},${nro},'30674589020',80,'20111111112','QA','PES',${percepIvaCents},${ivaCents * 6},${libro === "compras" ? ivaCents : 0},${estudioMe.user.id}) returning id`;
-        await sql!`insert into imp_comprobante_alicuotas(company_id,comprobante_id,alicuota_codigo,neto_cents,iva_cents) values(${estudio.id},${row.id},5,${ivaCents * 5},${ivaCents})`;
+        const [row] = await sql!`insert into imp_comprobantes(company_id,empresa_cliente_id,libro,origen,fecha_cbte,periodo,tipo_cbte,punto_venta,numero_desde,numero_hasta,doc_nro_emisor,doc_tipo,doc_nro,denominacion,moneda,percep_iva_cents,total_cents,credito_fiscal_computable_cents,created_by)
+          values(${estudio.id},${empresaFiscal.id},${libro},'manual',${`${periodo.slice(0, 4)}-${periodo.slice(4)}-10`},${periodo},${tipo},1,${nro},${nro},'30674589020',80,'20111111112','QA','PES',${percepIvaCents},${ivaCents * 6},${libro === "compras" ? ivaCents : 0},${estudioMe.user.id}) returning id`;
+        await sql!`insert into imp_comprobante_alicuotas(company_id,empresa_cliente_id,comprobante_id,alicuota_codigo,neto_cents,iva_cents) values(${estudio.id},${empresaFiscal.id},${row.id},5,${ivaCents * 5},${ivaCents})`;
       };
       await cbte("compras", "202608", 1, 200_000);
       const agosto = await request("impuestos/liquidacion", { periodo: "202608", confirmar: true });
@@ -524,6 +526,18 @@ describe.skipIf(!enabled)(
       const bloqueada = await fetch(`${base}/api/impuestos/liquidacion`, { method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json" }, body: JSON.stringify({ periodo: "202609" }) });
       expect(bloqueada.status).toBe(409);
       expect(JSON.stringify(await bloqueada.json())).toContain("reabrilo");
+      const empresasImpuestos = await request("impuestos/empresas");
+      expect(empresasImpuestos.items).toHaveLength(1);
+      const clienteFiscal = await request("impuestos/empresas", {
+        nombre: "Cliente fiscal QA", razonSocial: "Cliente fiscal QA SA",
+        cuit: buildCuit("30", "67458903"), condicionIva: "ri", rubro: "servicios",
+      });
+      expect((await request(`impuestos/empresas/${clienteFiscal.id}`)).counts).toEqual({compras:0,ventas:0,periodos:0,liquidaciones:0});
+      await request(`impuestos/empresas/${clienteFiscal.id}`, {...clienteFiscal,nombre:"Cliente fiscal editado"},200,"PATCH");
+      const [auditEmpresa] = await sql!`select action from audit_log where company_id=${estudio.id} and entity_id=${clienteFiscal.id} order by created_at desc limit 1`;
+      expect(auditEmpresa.action).toBe("impuestos.empresa.editar");
+      await request(`impuestos/empresas/${clienteFiscal.id}`,undefined,200,"DELETE");
+      expect((await request("impuestos/empresas")).items).toHaveLength(1);
       await request("auth/empresa", { companyId: created.id });
       // Rubro comercio (distribuidora): Impuestos no aparece aunque se pida en el alta o la configuración.
       await sql!`update companies set enabled_modules=array_append(enabled_modules,'impuestos') where id=${created.id}`;

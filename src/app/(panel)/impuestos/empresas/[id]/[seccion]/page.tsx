@@ -1,0 +1,2 @@
+import { notFound } from "next/navigation";import { EmpresaDetailScreen } from "@/components/impuestos/empresa-detail-screen";import { SECCIONES_IMPUESTOS,type SeccionImpuestos } from "@/components/impuestos/empresa-types";
+export default async function Page({params}:{params:Promise<{id:string;seccion:string}>}){const{id,seccion}=await params;if(!SECCIONES_IMPUESTOS.some(item=>item.key===seccion))notFound();return <EmpresaDetailScreen id={id} seccion={seccion as SeccionImpuestos}/>}

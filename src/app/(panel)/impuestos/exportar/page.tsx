@@ -1,1 +1,1 @@
-import { ExportarScreen } from "@/components/impuestos/exportar-screen"; export default function Page(){return <ExportarScreen/>}
+import { redirect } from "next/navigation"; export default function Page(){redirect("/impuestos")}

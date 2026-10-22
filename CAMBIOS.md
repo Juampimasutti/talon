@@ -1,5 +1,41 @@
 # CAMBIOS – Impuestos etapa 1
 
+## Árbol de empresas clientes (Parte 1)
+
+### Decisión de modelo
+- Se adoptó `imp_empresas` dentro del tenant del estudio. Cada cliente fiscal tiene su propio CUIT, condición de IVA y rubro sin convertirse en una empresa operativa de Talón.
+- `company_id` continúa siendo el límite de RLS entre estudios. `empresa_cliente_id` separa comprobantes, importaciones, períodos, saldos, liquidaciones y configuración dentro de cada estudio.
+- Las relaciones internas usan claves compuestas con ambos identificadores para impedir cruces accidentales entre clientes.
+
+### Migración 0038
+- Crea `imp_empresas`, RLS, índices y baja lógica.
+- Crea una empresa cliente predeterminada por cada empresa existente y vincula allí todos los datos `imp_` anteriores.
+- Agrega `empresa_cliente_id` a las 12 tablas fiscales del tenant, sin borrar datos.
+- Una instalación con un solo cliente mantiene compatibilidad automática. Cuando hay varios, PostgreSQL exige seleccionar uno mediante el contexto fiscal.
+- Las empresas nuevas reciben su cliente fiscal inicial automáticamente. El respaldo y la restauración incluyen ahora 13 tablas de Impuestos.
+
+### Interfaz y API
+- Impuestos es un árbol lateral con las empresas activas, CUIT y acceso para agregar otra.
+- Alta, edición y baja lógica con auditoría (`impuestos.empresa.crear`, `editar` y `baja`).
+- Encabezado permanente con nombre, razón social y CUIT de la empresa seleccionada.
+- Rutas separadas para Compras, Ventas, Libro de IVA, Liquidación y Configuración.
+- En esta Parte 1 las subsecciones muestran datos mínimos aislados y avisan que el contenido operativo se completa en la Parte 2.
+- Las rutas planas anteriores redirigen al árbol para evitar operar sin una empresa cliente identificada.
+
+### Seguridad comprobada
+- Dos clientes del mismo estudio pueden tener el mismo período y sólo ven sus propios datos.
+- Un estudio no puede seleccionar ni escribir sobre clientes de otro tenant.
+- Las reglas previas se conservan: sólo Contador accede a Impuestos y el módulo sigue oculto para comercio/distribuidora y estación.
+
+### Verificación de esta entrega
+- TypeScript: correcto.
+- Lint: 0 errores y 4 advertencias preexistentes.
+- `npm test`: 131 aprobados y 24 omitidos (las suites de integración se ejecutaron por separado).
+- `test:db`: 10/10 aprobados, incluidos aislamiento por cliente y RLS entre estudios.
+- `test:flows`: build de producción correcto y 14/14 circuitos aprobados.
+- Migración y seed desde base vacía: correctos.
+- Actualización desde `0037` con datos: correcta; conservó configuración, período y comprobante en la empresa cliente predeterminada.
+
 ## Parte 1 – Kit único y rubros
 - Se borró ELEGIR-MODO-TALON.cmd. Hay un kit único, sin la pregunta N/E.
 - Gating en el servidor: `effectiveModules` se aplica al cargar la sesión.

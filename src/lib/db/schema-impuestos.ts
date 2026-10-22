@@ -71,34 +71,55 @@ export const impMatrizLetras = pgTable("imp_matriz_letras", {
   vigenteHasta: date("vigente_hasta", { mode: "string" }),
 });
 
+export const impEmpresas = pgTable("imp_empresas", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull(),
+  nombre: text("nombre").notNull(),
+  razonSocial: text("razon_social").notNull(),
+  cuit: text("cuit").notNull(),
+  condicionIva: text("condicion_iva").notNull(),
+  rubro: text("rubro"),
+  activa: boolean("activa").notNull().default(true),
+  createdBy: uuid("created_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  unique("imp_empresas_company_cuit").on(table.companyId, table.cuit),
+  unique("imp_empresas_id_company").on(table.id, table.companyId),
+]);
+
 export const impConfig = pgTable("imp_config", {
-  companyId: uuid("company_id").primaryKey(),
+  companyId: uuid("company_id").notNull(),
+  empresaClienteId: uuid("empresa_cliente_id").notNull(),
   toleranciaCents: bigint("tolerancia_cents", { mode: "number" }).notNull().default(5),
   crearEnTalonDefault: boolean("crear_en_talon_default").notNull().default(false),
   prorrateaDefault: boolean("prorratea_default").notNull().default(false),
   modoProrrateoDefault: text("modo_prorrateo_default").notNull().default("global"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [primaryKey({ columns: [table.companyId, table.empresaClienteId] })]);
 
 export const impPuntosVenta = pgTable("imp_puntos_venta", {
   id: uuid("id").primaryKey().defaultRandom(),
   companyId: uuid("company_id").notNull(),
+  empresaClienteId: uuid("empresa_cliente_id").notNull(),
   numero: integer("numero").notNull(),
   sistema: text("sistema").notNull(),
   activo: boolean("activo").notNull().default(true),
-}, (table) => [unique("imp_puntos_venta_company_numero").on(table.companyId, table.numero)]);
+}, (table) => [unique("imp_puntos_venta_empresa_numero").on(table.companyId, table.empresaClienteId, table.numero)]);
 
 export const impActividades = pgTable("imp_actividades", {
   id: uuid("id").primaryKey().defaultRandom(),
   companyId: uuid("company_id").notNull(),
+  empresaClienteId: uuid("empresa_cliente_id").notNull(),
   codigo: text("codigo").notNull(),
   descripcion: text("descripcion").notNull(),
   principal: boolean("principal").notNull().default(false),
-}, (table) => [unique("imp_actividades_company_codigo").on(table.companyId, table.codigo)]);
+}, (table) => [unique("imp_actividades_empresa_codigo").on(table.companyId, table.empresaClienteId, table.codigo)]);
 
 export const impContrapartes = pgTable("imp_contrapartes", {
   id: uuid("id").primaryKey().defaultRandom(),
   companyId: uuid("company_id").notNull(),
+  empresaClienteId: uuid("empresa_cliente_id").notNull(),
   docTipo: integer("doc_tipo").notNull(),
   docNro: text("doc_nro").notNull(),
   denominacion: text("denominacion").notNull(),
@@ -107,28 +128,31 @@ export const impContrapartes = pgTable("imp_contrapartes", {
   customerId: uuid("customer_id"),
   supplierId: uuid("supplier_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [unique("imp_contrapartes_company_documento").on(table.companyId, table.docTipo, table.docNro)]);
+}, (table) => [unique("imp_contrapartes_empresa_documento").on(table.companyId, table.empresaClienteId, table.docTipo, table.docNro)]);
 
 export const impMapeoTributos = pgTable("imp_mapeo_tributos", {
   id: uuid("id").primaryKey().defaultRandom(),
   companyId: uuid("company_id").notNull(),
+  empresaClienteId: uuid("empresa_cliente_id").notNull(),
   nombreTalon: text("nombre_talon").notNull(),
   destino: text("destino").notNull(),
-}, (table) => [unique("imp_mapeo_tributos_company_nombre").on(table.companyId, table.nombreTalon)]);
+}, (table) => [unique("imp_mapeo_tributos_empresa_nombre").on(table.companyId, table.empresaClienteId, table.nombreTalon)]);
 
 export const impPeriodos = pgTable("imp_periodos", {
   companyId: uuid("company_id").notNull(),
+  empresaClienteId: uuid("empresa_cliente_id").notNull(),
   periodo: text("periodo").notNull(),
   estado: text("estado").notNull().default("abierto"),
   prorratea: boolean("prorratea").notNull().default(false),
   modoProrrateo: text("modo_prorrateo").notNull().default("global"),
   coeficienteBps: integer("coeficiente_bps"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [primaryKey({ columns: [table.companyId, table.periodo] })]);
+}, (table) => [primaryKey({ columns: [table.companyId, table.empresaClienteId, table.periodo] })]);
 
 export const impImportJobs = pgTable("imp_import_jobs", {
   id: uuid("id").primaryKey().defaultRandom(),
   companyId: uuid("company_id").notNull(),
+  empresaClienteId: uuid("empresa_cliente_id").notNull(),
   tipo: text("tipo").notNull(),
   archivoNombre: text("archivo_nombre").notNull(),
   archivoHash: text("archivo_hash").notNull(),
@@ -138,11 +162,12 @@ export const impImportJobs = pgTable("imp_import_jobs", {
   createdBy: uuid("created_by").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
-}, (table) => [unique("imp_import_jobs_company_hash").on(table.companyId, table.tipo, table.archivoHash)]);
+});
 
 export const impComprobantes = pgTable("imp_comprobantes", {
   id: uuid("id").primaryKey().defaultRandom(),
   companyId: uuid("company_id").notNull(),
+  empresaClienteId: uuid("empresa_cliente_id").notNull(),
   libro: text("libro").notNull(),
   origen: text("origen").notNull(),
   sourceDocumentId: uuid("source_document_id"),
@@ -181,11 +206,12 @@ export const impComprobantes = pgTable("imp_comprobantes", {
   createdBy: uuid("created_by").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [unique("imp_comprobantes_identity").on(table.companyId, table.libro, table.docNroEmisor, table.tipoCbte, table.puntoVenta, table.numeroDesde)]);
+}, (table) => [unique("imp_comprobantes_empresa_identity").on(table.companyId, table.empresaClienteId, table.libro, table.docNroEmisor, table.tipoCbte, table.puntoVenta, table.numeroDesde)]);
 
 export const impComprobanteAlicuotas = pgTable("imp_comprobante_alicuotas", {
   id: uuid("id").primaryKey().defaultRandom(),
   companyId: uuid("company_id").notNull(),
+  empresaClienteId: uuid("empresa_cliente_id").notNull(),
   comprobanteId: uuid("comprobante_id").notNull(),
   alicuotaCodigo: integer("alicuota_codigo").notNull(),
   netoCents: bigint("neto_cents", { mode: "number" }).notNull(),
@@ -195,6 +221,7 @@ export const impComprobanteAlicuotas = pgTable("imp_comprobante_alicuotas", {
 export const impImportRows = pgTable("imp_import_rows", {
   id: uuid("id").primaryKey().defaultRandom(),
   companyId: uuid("company_id").notNull(),
+  empresaClienteId: uuid("empresa_cliente_id").notNull(),
   jobId: uuid("job_id").notNull(),
   fila: integer("fila").notNull(),
   raw: jsonb("raw").$type<Record<string, unknown>>().notNull(),
@@ -206,6 +233,7 @@ export const impImportRows = pgTable("imp_import_rows", {
 export const impLiquidaciones = pgTable("imp_liquidaciones", {
   id: uuid("id").primaryKey().defaultRandom(),
   companyId: uuid("company_id").notNull(),
+  empresaClienteId: uuid("empresa_cliente_id").notNull(),
   periodo: text("periodo").notNull(),
   estado: text("estado").notNull().default("borrador"),
   totales: jsonb("totales").$type<Record<string, number>>().notNull().default({}),
@@ -215,11 +243,12 @@ export const impLiquidaciones = pgTable("imp_liquidaciones", {
   createdBy: uuid("created_by").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [unique("imp_liquidaciones_company_periodo").on(table.companyId, table.periodo)]);
+}, (table) => [unique("imp_liquidaciones_empresa_periodo").on(table.companyId, table.empresaClienteId, table.periodo)]);
 
 export const impLiquidacionItems = pgTable("imp_liquidacion_items", {
   id: uuid("id").primaryKey().defaultRandom(),
   companyId: uuid("company_id").notNull(),
+  empresaClienteId: uuid("empresa_cliente_id").notNull(),
   liquidacionId: uuid("liquidacion_id").notNull(),
   rubro: text("rubro").notNull(),
   concepto: text("concepto").notNull(),

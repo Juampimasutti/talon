@@ -68,7 +68,7 @@ export async function traerDeTalon(tx: Tx, companyId: string, userId: string, pe
         ${number},${number},${d.cae as string|null},${emitter},${party.docTipo},${party.docNro},${String(d.party_name)},'PES',1,
         ${noGravado},${exento},${buckets.percep_iva},${buckets.percep_iibb},${buckets.percep_muni},${buckets.internos},${buckets.otros},
         ${Number(d.total_cents)},${isSale?0:Number(d.vat_cents)},${d.voided_at?"anulado":"vigente"},${userId}::uuid)
-      on conflict(company_id,source_document_id) where source_document_id is not null do update set
+      on conflict(company_id,empresa_cliente_id,source_document_id) where source_document_id is not null do update set
         fecha_cbte=excluded.fecha_cbte,tipo_cbte=excluded.tipo_cbte,punto_venta=excluded.punto_venta,
         numero_desde=excluded.numero_desde,numero_hasta=excluded.numero_hasta,cae=excluded.cae,doc_nro_emisor=excluded.doc_nro_emisor,
         doc_tipo=excluded.doc_tipo,doc_nro=excluded.doc_nro,denominacion=excluded.denominacion,neto_no_gravado_cents=excluded.neto_no_gravado_cents,
