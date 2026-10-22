@@ -19,6 +19,7 @@ const SECTIONS: [string, string][] = [
   ["/inmobiliaria", "inmobiliaria"],
   ["/reparto", "reparto"],
   ["/informes", "informes"],
+  ["/impuestos", "impuestos"],
   ["/pedidos", "pedidos"],
   ["/remitos", "remitos"],
 ];

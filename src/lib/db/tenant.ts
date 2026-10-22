@@ -2,12 +2,12 @@ import { sql, type ExtractTablesWithRelations } from "drizzle-orm";
 import type { PgTransaction } from "drizzle-orm/pg-core";
 import type { PostgresJsQueryResultHKT } from "drizzle-orm/postgres-js";
 import { getDb } from "./client";
-import type * as schema from "./schema";
+import type * as coreSchema from "./schema";
 
 export type Tx = PgTransaction<
   PostgresJsQueryResultHKT,
-  typeof schema,
-  ExtractTablesWithRelations<typeof schema>
+  typeof coreSchema,
+  ExtractTablesWithRelations<typeof coreSchema>
 >;
 
 export async function withTenant<T>(

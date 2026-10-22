@@ -13,7 +13,7 @@
     "start": "node scripts/serve.mjs start --hostname 0.0.0.0 --port 4317",
     "lint": "eslint",
     "test": "vitest run",
-    "test:db": "vitest run src/lib/db/rls.integration.test.ts",
+    "test:db": "vitest run src/lib/db/rls.integration.test.ts src/lib/db/impuestos-rls.integration.test.ts",
     "test:flows": "npm run build && RUN_FLOW_TESTS=1 vitest run src/lib/db/business-flows.integration.test.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",

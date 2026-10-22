@@ -3,6 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import {
   BookOpen,
+  Calculator,
   Landmark,
   ClipboardList,
   ArrowLeftRight,
@@ -55,6 +56,7 @@ const HREF: Record<string, string> = {
   inmobiliaria: "/inmobiliaria",
   reparto: "/reparto",
   informes: "/informes",
+  impuestos: "/impuestos",
   configuracion: "/configuracion",
 };
 
@@ -78,6 +80,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   inmobiliaria: Landmark,
   reparto: Route,
   informes: ClipboardList,
+  impuestos: Calculator,
   configuracion: Settings,
 };
 

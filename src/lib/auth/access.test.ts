@@ -82,5 +82,7 @@ describe("matriz de puestos", () => {
 
   it("un módulo apagado no es un 404", () => {
     expect(sectionAccess("/remitos", ROLE_TEMPLATES.admin.permissions, ["ventas"])).toBe("module-off");
+    expect(sectionAccess("/impuestos", ROLE_TEMPLATES.admin.permissions, ["ventas"])).toBe("module-off");
+    expect(sectionAccess("/impuestos", ROLE_TEMPLATES.admin.permissions, ["ventas", "impuestos"])).toBe("allow");
   });
 });

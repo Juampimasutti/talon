@@ -20,6 +20,7 @@ export const MODULES = [
   { key: "inmobiliaria", label: "Inmobiliaria", hint: "Propiedades, contratos y liquidaciones", toggle: true },
   { key: "reparto", label: "Reparto", hint: "Camiones propios y entrega a granel", toggle: true },
   { key: "informes", label: "Informes", hint: "Ventas, IVA, caja, stock y rentabilidad", toggle: true },
+  { key: "impuestos", label: "Impuestos", hint: "Libros IVA y liquidación mensual", toggle: true },
   { key: "auditoria", label: "Auditoría", hint: "Quién hizo cada cosa", toggle: true },
   { key: "configuracion", label: "Configuración", hint: "Empresa, módulos, roles y campos", toggle: false },
 ] as const;

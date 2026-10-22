@@ -74,8 +74,25 @@ describe("permisos", () => {
 
   it("un módulo apagado no se muestra aunque el rol pueda verlo", () => {
     expect(moduleEnabled(["ventas"], "compras")).toBe(false);
+    expect(moduleEnabled(["ventas"], "impuestos")).toBe(false);
+    expect(visibleModules(["ventas"], ROLE_TEMPLATES.admin.permissions).map((item) => item.key)).not.toContain("impuestos");
+    expect(visibleModules(["ventas", "impuestos"], ROLE_TEMPLATES.admin.permissions).map((item) => item.key)).toContain("impuestos");
     expect(moduleEnabled(["ventas"], "dashboard")).toBe(true);
     expect(moduleEnabled([], "configuracion")).toBe(true);
+  });
+
+  it("crea los seis permisos de impuestos y limita al contador a lectura", () => {
+    expect(allPermissions().filter((permission) => permission.startsWith("impuestos."))).toEqual([
+      "impuestos.ver",
+      "impuestos.crear",
+      "impuestos.editar",
+      "impuestos.anular",
+      "impuestos.importar",
+      "impuestos.exportar",
+    ]);
+    expect(can(ROLE_TEMPLATES.contador.permissions, "impuestos", "ver")).toBe(true);
+    expect(can(ROLE_TEMPLATES.contador.permissions, "impuestos", "exportar")).toBe(true);
+    expect(can(ROLE_TEMPLATES.contador.permissions, "impuestos", "crear")).toBe(false);
   });
 
   it("caja, depósito y compras quedan en su carril", () => {
