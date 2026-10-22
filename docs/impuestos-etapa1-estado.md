@@ -18,7 +18,9 @@ Las 12 tablas `imp_` con `company_id` participan de `company_snapshot` y de la r
 
 ## Referencias y validaciones externas pendientes
 
-Las fuentes de ARCA devolvieron HTTP 403 desde este entorno. Se cargó únicamente el subconjunto de tipos necesario para los fixtures y las seis alícuotas indicadas explícitamente por el brief. Siguen pendientes la tabla oficial completa, los códigos de operación, monedas, documentos, condiciones IVA y la matriz de letras.
+El paquete `docs/arca-tablas/` incorpora las respuestas de WSFE homologación y las tablas oficiales descargadas el 22/10/2026. La migración `0033_impuestos_tablas_arca.sql` carga 11 condiciones IVA, 133 tipos de comprobante, 6 alícuotas, 9 códigos de operación, 53 monedas, 36 tipos de documento y 55 combinaciones de la matriz de letras.
+
+Los límites del material se conservan en `docs/arca-tablas/FUENTES.md`: letra, clase, signo y alcance de varios comprobantes son campos derivados; varias fechas usan `1900-01-01` como centinela; y parte de la matriz se apoya en WSFE porque el texto correspondiente de la RG 1415 no fue descargado. Los 18 tipos de tributo se guardan como referencia CSV, pero no se cargan porque el modelo actual no tiene una tabla global de destino.
 
 También siguen pendientes:
 

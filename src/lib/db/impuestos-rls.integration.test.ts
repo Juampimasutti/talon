@@ -69,6 +69,14 @@ describe.skipIf(!enabled)("impuestos RLS", () => {
       await tx`select set_config('app.company_id',${companyA},true),set_config('app.user_id',${laura},true)`;
       const rates = await tx`select codigo,bps from imp_alicuotas order by codigo`;
       expect(rates).toHaveLength(6);
+      const [references] = await tx`select
+        (select count(*)::int from imp_condiciones_iva) condiciones,
+        (select count(*)::int from imp_tipos_comprobante) comprobantes,
+        (select count(*)::int from imp_codigos_operacion) operaciones,
+        (select count(*)::int from imp_monedas) monedas,
+        (select count(*)::int from imp_tipos_documento) documentos,
+        (select count(*)::int from imp_matriz_letras) matriz`;
+      expect(references).toEqual({ condiciones: 11, comprobantes: 133, operaciones: 9, monedas: 53, documentos: 36, matriz: 55 });
       await tx`insert into imp_config(company_id) values(${companyA})`;
     });
     await expect(app!.begin(async (tx) => {

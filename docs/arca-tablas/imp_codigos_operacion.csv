@@ -1,0 +1,10 @@
+codigo,descripcion,vigente_desde,vigente_hasta
+A,No Alcanzado,1900-01-01,
+0,No corresponde (también se acepta espacio),1900-01-01,
+C,Operac. Canje,1900-01-01,
+D,Devol. IVA Turistas Extr.,1900-01-01,
+E,Operaciones Exentas,1900-01-01,
+N,No gravado,1900-01-01,
+T,Reintegro Decreto 1043/2016,1900-01-01,
+X,Compras: Importación del Exterior / Ventas: Exportación al Exterior,1900-01-01,
+Z,Compras: Importación de Zona Franca / Ventas: Exportación a Zona Franca,1900-01-01,

@@ -1,0 +1,12 @@
+codigo,descripcion,talon_tax_condition,vigente_desde,vigente_hasta,ws_cmp_clase_receptor
+1,IVA Responsable Inscripto,ri,1900-01-01,,A/ALEY/C
+4,IVA Sujeto Exento,exento,1900-01-01,,B/C
+5,Consumidor Final,cf,1900-01-01,,C/49
+6,Responsable Monotributo,monotributo,1900-01-01,,A/ALEY/C
+7,Sujeto no Categorizado,,1900-01-01,,B/C
+8,Proveedor del Exterior,,1900-01-01,,B/C
+9,Cliente del Exterior,,1900-01-01,,B/C
+10,IVA Liberado – Ley Nº 19.640,,1900-01-01,,B/C
+13,Monotributista Social,monotributo,1900-01-01,,A/ALEY/C
+15,IVA No Alcanzado,,1900-01-01,,B/C
+16,Monotributo Trabajador Independiente Promovido,monotributo,1900-01-01,,A/ALEY/C

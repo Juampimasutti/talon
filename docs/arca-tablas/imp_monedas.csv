@@ -1,0 +1,54 @@
+codigo,descripcion,vigente_desde,vigente_hasta,fuente
+PES,Pesos Argentinos,2009-04-03,,WSFE
+DOL,Dólar Estadounidense,2009-04-03,,WSFE
+002,Dólar Libre EEUU,2009-04-16,,WSFE
+010,Pesos Mejicanos,2009-04-03,,WSFE
+011,Pesos Uruguayos,2009-04-03,,WSFE
+014,Coronas Danesas,2009-04-03,,WSFE
+015,Coronas Noruegas,2009-04-03,,WSFE
+016,Coronas Suecas,2009-04-03,,WSFE
+018,Dólar Canadiense,2009-04-03,,WSFE
+019,Yens,2009-04-03,,WSFE
+021,Libra Esterlina,2009-04-03,,WSFE
+023,Bolívar Venezolano,2009-04-03,,WSFE
+024,Corona Checa,2009-04-03,,WSFE
+025,Dinar Serbio,2009-04-03,,WSFE
+026,Dólar Australiano,2009-04-03,,WSFE
+028,Florín (Antillas Holandesas),2009-04-03,,WSFE
+029,Güaraní,2009-04-03,,WSFE
+031,Peso Boliviano,2009-04-03,,WSFE
+032,Peso Colombiano,2009-04-03,,WSFE
+033,Peso Chileno,2009-04-03,,WSFE
+034,Rand Sudafricano,2009-04-03,,WSFE
+051,Dólar de Hong Kong,2009-04-03,,WSFE
+052,Dólar de Singapur,2009-04-03,,WSFE
+053,Dólar de Jamaica,2009-04-03,,WSFE
+054,Dólar de Taiwan,2009-04-03,,WSFE
+055,Quetzal Guatemalteco,2009-04-03,,WSFE
+056,Forint (Hungría),2009-04-03,,WSFE
+057,Baht (Tailandia),2009-04-03,,WSFE
+059,Dinar Kuwaiti,2009-04-03,,WSFE
+012,Real,2009-04-03,,WSFE
+030,Shekel (Israel),2009-04-03,,WSFE
+035,Nuevo Sol Peruano,2009-04-03,,WSFE
+060,Euro,2009-04-03,,WSFE
+040,Leu Rumano,2009-04-15,,WSFE
+042,Peso Dominicano,2009-04-15,,WSFE
+043,Balboas Panameñas,2009-04-15,,WSFE
+044,Córdoba Nicaragüense,2009-04-15,,WSFE
+045,Dirham Marroquí,2009-04-15,,WSFE
+046,Libra Egipcia,2009-04-15,,WSFE
+047,Riyal Saudita,2009-04-15,,WSFE
+061,Zloty Polaco,2009-04-15,,WSFE
+062,Rupia Hindú,2009-04-15,,WSFE
+063,Lempira Hondureña,2009-04-15,,WSFE
+064,Yuan (Rep. Pop. China),2009-04-15,,WSFE
+009,Franco Suizo,2009-11-10,,WSFE
+041,Derechos Especiales de Giro,2010-01-25,,WSFE
+049,Gramos de Oro Fino,2010-01-25,,WSFE
+RUB,Rublo (Rusia),2025-01-15,,WSFE
+NZD,Dólar Neozelandes,2025-01-15,,WSFE
+007,FLORINES HOLANDESES,1900-01-01,,solo LIVA (no vigente en WSFE)
+027,DRACMA GRIEGO,1900-01-01,,solo LIVA (no vigente en WSFE)
+036,SUCRE ECUATORIANO,1900-01-01,,solo LIVA (no vigente en WSFE)
+039,NUEVO LEV BULGARO,1900-01-01,,solo LIVA (no vigente en WSFE)

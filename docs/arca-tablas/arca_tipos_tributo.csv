@@ -1,0 +1,19 @@
+codigo,descripcion_wsfe,descripcion_xlsx,observaciones,ws_fch_desde,en_wsfe
+1,Impuestos nacionales,Impuestos nacionales,,2010-09-17,si
+2,Impuestos provinciales,Impuestos provinciales,,2010-09-17,si
+3,Impuestos municipales,Tributos municipales,,2010-09-17,si
+4,Impuestos Internos,Impuestos internos,,2010-09-17,si
+5,IIBB,IIBB,,2017-07-19,si
+6,Percepción de IVA,Percepción de IVA,,2017-07-19,si
+7,Percepción de IIBB,Percepción de IIBB,,2017-07-19,si
+8,Percepciones por Impuestos Municipales,Percepciones por Tributos Municipales,,2017-07-19,si
+9,Otras Percepciones,Otras Percepciones,,2017-07-19,si
+10,Impuesto interno a nivel item,Impuesto interno a nivel item,Sólo Controladores Fiscales,,no
+13,Percepción de IVA a no Categorizado,Percepción de IVA a no Categorizado,Solo FE,2017-07-19,si
+14,Retención IIGG - RG 830,Retención IIGG - RG 830,Liquidaciones Pecuarias,,no
+15,Retención IVA - RG 3873,Retención IVA - RG 3873,Liquidaciones Pecuarias,,no
+16,Pago a cuenta IVA - RG 3873,Pago a cuenta IVA - RG 3873,Liquidaciones Pecuarias,,no
+17,Percepción IVA  RG 3873,Percepción IVA  RG 3873,Liquidaciones Pecuarias,,no
+18,Retención IVA – RG 2616/2009,Retención IVA – RG 2616/2009,Liquidaciones Pecuarias,,no
+19,Retención Ganancias – RG 2616/2009,Retención Ganancias – RG 2616/2009,Liquidaciones Pecuarias,,no
+99,Otro,Otros,,2010-09-17,si
