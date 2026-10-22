@@ -1,8 +1,8 @@
 # Modo Negocio y Estudio en Windows
 
-Para una instalación nueva, ejecutar `ELEGIR-MODO-TALON.cmd`. La herramienta pregunta si Talón se instalará como **Negocio** o **Estudio contable** y pasa la elección a la instalación mediante `TALON_MODO`.
+Hay un solo kit de instalación (`PROBAR-TALON.cmd`) y no pregunta nada. Al iniciar, Talón oculta Impuestos del menú (y lo bloquea en la API) en las empresas de tipo negocio cuyo rubro es `comercio` (incluye distribuidoras) o `estacion` (estación de servicio). Las empresas en modo estudio siempre tienen Impuestos.
 
-También se puede ejecutar sin preguntas:
+Opcionalmente, para forzar un modo sin preguntas:
 
 ```powershell
 $env:TALON_MODO = 'estudio'
@@ -20,4 +20,4 @@ El cambio conserva los datos. En modo Estudio queda habilitado Impuestos; Sueldo
 
 ## Prueba pendiente en Windows
 
-La ejecución real de los archivos `.cmd` y PowerShell debe verificarse en una PC o VM Windows con Node.js 24 LTS, npm 11 y Docker Desktop. Comprobar ambas opciones, una ejecución con `TALON_MODO=estudio`, la repetición idempotente de `talon:modo` y la conservación de datos al alternar modos.
+La ejecución real de los archivos `.cmd` y PowerShell debe verificarse en una PC o VM Windows con Node.js 24 LTS, npm 11 y Docker Desktop. Comprobar la instalación sin variables, una ejecución con `TALON_MODO=estudio`, la repetición idempotente de `talon:modo` y la conservación de datos al alternar modos.

@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { z } from "zod";
 import { hashPassword } from "@/lib/auth/password";
 import { verifyPassword } from "@/lib/auth/password";
-import { MODULES, allPermissions, can, moduleAvailable, moduleEnabled, moduleToggleDelta, permissionAllowedForRole, type ModuleKey } from "@/lib/auth/permissions";
+import { MODULES, allPermissions, can, moduleAvailable, moduleEnabled, moduleOfferedForCompany, moduleToggleDelta, permissionAllowedForRole, type ModuleKey } from "@/lib/auth/permissions";
 import { authFromToken, clearSession, getAuth, publicUser, requirePermission, startSession, switchCompany } from "@/lib/auth/session";
 import { withTenant, type Tx } from "@/lib/db/tenant";
 import { getDb } from "@/lib/db/client";
@@ -1336,9 +1336,15 @@ async function configuracion(method: string, req: Request) {
     const auth = await requirePermission("configuracion", "editar");
     const body = await readBody(req, companySchema);
     const allowed = new Set<string>(MODULES.filter((moduleKey) => moduleKey.toggle && moduleAvailable(moduleKey.key)).map((moduleKey) => moduleKey.key));
-    const enabledModules = body.enabledModules.filter((moduleKey) => allowed.has(moduleKey as ModuleKey));
     return withTenant(auth.company.companyId, auth.user.id, async (tx) => {
-      const [before] = await tx.select({ enabledModules: companies.enabledModules }).from(companies).where(eq(companies.id, auth.company.companyId));
+      const [before] = await tx.select({ enabledModules: companies.enabledModules, businessSector: companies.businessSector, tipo: companies.tipo }).from(companies).where(eq(companies.id, auth.company.companyId));
+      const kind = { businessSector: before?.businessSector, tipo: before?.tipo };
+      // Impuestos no se ofrece a comercio/estación: no se puede prender por API. Si la base ya lo
+      // tenía (instalaciones viejas), se conserva tal cual para no generar auditoría falsa.
+      const enabledModules = [
+        ...body.enabledModules.filter((moduleKey) => allowed.has(moduleKey as ModuleKey) && moduleOfferedForCompany(moduleKey, kind)),
+        ...(before?.enabledModules ?? []).filter((moduleKey) => allowed.has(moduleKey as ModuleKey) && !moduleOfferedForCompany(moduleKey, kind)),
+      ];
       const { turnedOn, turnedOff } = moduleToggleDelta(before?.enabledModules ?? [], enabledModules);
       const [row] = await tx
         .update(companies)

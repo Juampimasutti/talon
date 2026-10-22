@@ -161,6 +161,7 @@ export const impComprobantes = pgTable("imp_comprobantes", {
   condicionIva: integer("condicion_iva"),
   contraparteId: uuid("contraparte_id"),
   moneda: text("moneda").notNull(),
+  despacho: text("despacho"),
   tipoCambio: numeric("tipo_cambio", { precision: 18, scale: 6, mode: "number" }).notNull().default(1),
   netoNoGravadoCents: bigint("neto_no_gravado_cents", { mode: "number" }).notNull().default(0),
   exentoCents: bigint("exento_cents", { mode: "number" }).notNull().default(0),

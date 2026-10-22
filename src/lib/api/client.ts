@@ -133,6 +133,8 @@ export type Me = {
     city: string | null;
     province: string | null;
     modules: string[];
+    businessSector?: string;
+    tipo?: string;
     blockNegativeStock: boolean;
   };
   role: { id: string; key: string; name: string };

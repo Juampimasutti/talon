@@ -497,7 +497,38 @@ describe.skipIf(!enabled)(
       const [estudioRow] = await sql!`select tipo from companies where id=${estudio.id}`;
       expect(estudioRow.tipo).toBe("estudio");
       await request("clientes", undefined, 403);
+      // Liquidación IVA: el saldo técnico a favor de agosto se arrastra solo a septiembre
+      // y reproduce el ejemplo (saldo a pagar $ 5.050,00); el período confirmado no se recalcula.
+      let nro = 0;
+      const cbte = async (libro: string, periodo: string, tipo: number, ivaCents: number, percepIvaCents = 0) => {
+        nro += 1;
+        const [row] = await sql!`insert into imp_comprobantes(company_id,libro,origen,fecha_cbte,periodo,tipo_cbte,punto_venta,numero_desde,numero_hasta,doc_nro_emisor,doc_tipo,doc_nro,denominacion,moneda,percep_iva_cents,total_cents,credito_fiscal_computable_cents,created_by)
+          values(${estudio.id},${libro},'manual',${`${periodo.slice(0, 4)}-${periodo.slice(4)}-10`},${periodo},${tipo},1,${nro},${nro},'30674589020',80,'20111111112','QA','PES',${percepIvaCents},${ivaCents * 6},${libro === "compras" ? ivaCents : 0},${estudioMe.user.id}) returning id`;
+        await sql!`insert into imp_comprobante_alicuotas(company_id,comprobante_id,alicuota_codigo,neto_cents,iva_cents) values(${estudio.id},${row.id},5,${ivaCents * 5},${ivaCents})`;
+      };
+      await cbte("compras", "202608", 1, 200_000);
+      const agosto = await request("impuestos/liquidacion", { periodo: "202608", confirmar: true });
+      expect(agosto.totales.saldoTecnicoAFavorCents).toBe(200_000);
+      await cbte("ventas", "202609", 1, 2_100_000);
+      await cbte("ventas", "202609", 1, 525_000);
+      await cbte("ventas", "202609", 3, 210_000);
+      await cbte("compras", "202609", 1, 1_260_000, 180_000);
+      await cbte("compras", "202609", 1, 270_000);
+      const septiembre = await request("impuestos/liquidacion", { periodo: "202609" });
+      expect(septiembre.avisos).toEqual([]);
+      expect(septiembre.totales).toMatchObject({ saldoTecnicoAnteriorCents: 200_000, totalPagarCents: 505_000, saldosAnterioresAutomaticos: true });
+      const leida = await request("impuestos/liquidacion?periodo=202609");
+      expect(leida.items.find((i: { concepto: string }) => i.concepto === "Saldo a pagar").importeCents).toBe(505_000);
+      expect(leida.items).toHaveLength(13);
+      await request("impuestos/liquidacion", { periodo: "202609", confirmar: true });
+      const bloqueada = await fetch(`${base}/api/impuestos/liquidacion`, { method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json" }, body: JSON.stringify({ periodo: "202609" }) });
+      expect(bloqueada.status).toBe(409);
+      expect(JSON.stringify(await bloqueada.json())).toContain("reabrilo");
       await request("auth/empresa", { companyId: created.id });
+      // Rubro comercio (distribuidora): Impuestos no aparece aunque se pida en el alta o la configuración.
+      await sql!`update companies set enabled_modules=array_append(enabled_modules,'impuestos') where id=${created.id}`;
+      expect((await request("auth/me")).company.modules).not.toContain("impuestos");
+      await request("impuestos/liquidacion?periodo=202609", undefined, 403);
       execFileSync(process.execPath, ["--import", "tsx", "scripts/seed.ts"], {
         env: {
           ...process.env,

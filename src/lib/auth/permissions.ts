@@ -33,6 +33,31 @@ export function moduleAvailable(moduleKey: string): boolean {
   return Boolean(definition && (!("available" in definition) || definition.available !== false));
 }
 
+/**
+ * Rubros (companies.business_sector) de negocio donde Impuestos no se ofrece.
+ * Claves exactas guardadas en la base: "comercio" (también es el rubro de las
+ * distribuidoras: no hay clave aparte) y "estacion" (estación de servicio).
+ * Las empresas en modo estudio (companies.tipo = 'estudio') siempre tienen
+ * Impuestos, sin importar el rubro con el que se dieron de alta.
+ */
+export const IMPUESTOS_HIDDEN_SECTORS: readonly string[] = ["comercio", "estacion"];
+
+export type CompanyKind = { businessSector?: string | null; tipo?: string | null };
+
+/** ¿El módulo se ofrece a esta empresa (menú, Configuración y API)? */
+export function moduleOfferedForCompany(moduleKey: string, company: CompanyKind): boolean {
+  if (!moduleAvailable(moduleKey)) return false;
+  if (moduleKey === "impuestos" && company.tipo !== "estudio") {
+    return !IMPUESTOS_HIDDEN_SECTORS.includes(company.businessSector ?? "comercio");
+  }
+  return true;
+}
+
+/** Módulos efectivos: los habilitados en la base menos los que el rubro no ofrece. */
+export function effectiveModules(enabled: readonly string[], company: CompanyKind): string[] {
+  return enabled.filter((moduleKey) => moduleOfferedForCompany(moduleKey, company));
+}
+
 export function permissionKey(moduleKey: string, action: string): string {
   return `${moduleKey}.${action}`;
 }

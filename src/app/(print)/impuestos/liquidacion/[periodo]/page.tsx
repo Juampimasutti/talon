@@ -1,1 +1,2 @@
-export default async function Page({params}:{params:Promise<{periodo:string}>}){const {periodo}=await params;return <main><h1>Liquidación IVA · {periodo}</h1><p><strong>Borrador – no constituye presentación ante ARCA.</strong></p><p>Impreso de trabajo. Los importes deben consultarse en la liquidación confirmada de Talón.</p></main>}
+import { LiquidacionImpresion } from "@/components/impuestos/impresion-impuestos";
+export default async function Page({params}:{params:Promise<{periodo:string}>}){const {periodo}=await params;return <LiquidacionImpresion periodo={periodo}/>;}

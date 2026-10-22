@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { normalizarMoneda } from "./libro-iva-digital";
 import { isValidCuit } from "@/lib/fiscal/cuit";
 
 const RATE_COLUMNS = [
@@ -64,6 +65,10 @@ function isoDate(value: unknown) {
   const match = String(value ?? "").match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
   return match ? `${match[3]}-${match[2]}-${match[1]}` : "";
 }
+/** CUIT/DNI sin guiones, puntos ni espacios. */
+export function soloDigitos(value: unknown) {
+  return String(value ?? "").replace(/\D/g, "");
+}
 function docCode(value: unknown) {
   const name = String(value ?? "").toUpperCase();
   if (!name) return 99;
@@ -102,10 +107,14 @@ export function parseMisComprobantesXlsx(input: Buffer | Uint8Array, options: Pa
     const puntoVenta = Number(get("Punto de Venta"));
     const numeroDesde = normalized(get("Número Desde"));
     const numeroHasta = normalized(get("Número Hasta")) || numeroDesde;
-    const emitter = tipo === "emitidos" ? titularCuit : normalized(get("Nro. Doc. Emisor"));
+    const emitter = tipo === "emitidos" ? titularCuit : soloDigitos(get("Nro. Doc. Emisor"));
     const identity = `${emitter}|${tipoCbte}|${puntoVenta}|${numeroDesde}`;
     const docLabel = tipo === "emitidos" ? get("Tipo Doc. Receptor") : get("Tipo Doc. Emisor");
-    const docNro = tipo === "emitidos" ? normalized(get("Nro. Doc. Receptor")) : emitter;
+    // Consumidor final / sin documento: código 99 y número 0 (tabla de documentos de ARCA).
+    const docTipoRaw = docCode(docLabel);
+    const docNroRaw = tipo === "emitidos" ? soloDigitos(get("Nro. Doc. Receptor")) : emitter;
+    const docTipo = docTipoRaw === 99 || !docNroRaw || /^0+$/.test(docNroRaw) ? 99 : docTipoRaw;
+    const docNro = docTipo === 99 ? "0" : docNroRaw;
     const denominacion = normalized(tipo === "emitidos" ? get("Denominación Receptor") : get("Denominación Emisor"));
     const sign = CREDIT_NOTES.has(tipoCbte) ? -1 : 1;
     const rates = RATE_COLUMNS.map((rate) => ({
@@ -124,7 +133,7 @@ export function parseMisComprobantesXlsx(input: Buffer | Uint8Array, options: Pa
     let motivo: string | undefined;
     if (existing.has(identity) || seen.has(identity)) { estado = "duplicado"; motivo = "Comprobante ya importado"; }
     else if (!fecha || !Number.isInteger(tipoCbte) || !Number.isInteger(puntoVenta) || !numeroDesde) { estado = "rechazado"; motivo = "Datos obligatorios inválidos"; }
-    else if (docCode(docLabel) === 80 && !isValidCuit(docNro)) { estado = "rechazado"; motivo = "CUIT de contraparte inválido"; }
+    else if (docTipo === 80 && !isValidCuit(docNro)) { estado = "rechazado"; motivo = "CUIT de contraparte inválido"; }
     else if (!NON_DISCRIMINATING.has(tipoCbte) && Math.abs(difference) > tolerance) { estado = "rechazado"; motivo = `Los componentes difieren del total en ${Math.abs(difference)} centavos`; }
     else if (!NON_DISCRIMINATING.has(tipoCbte) && difference !== 0) {
       otrosTributosCents += difference;
@@ -136,13 +145,14 @@ export function parseMisComprobantesXlsx(input: Buffer | Uint8Array, options: Pa
     if ((tipo === "recibidos") && normalized(get("Nro. Doc. Receptor")) && normalized(get("Nro. Doc. Receptor")) !== titularCuit) {
       avisos.push("El receptor informado no coincide con el titular");
     }
-    if (String(get("Moneda") ?? "$") !== "$" || Number(get("Tipo Cambio") ?? 1) !== 1) avisos.push("Moneda extranjera: revisar conversión a pesos");
+    const moneda = normalizarMoneda(normalized(get("Moneda")));
+    if (moneda !== "PES" || Number(get("Tipo Cambio") ?? 1) !== 1) avisos.push("Moneda extranjera: revisar conversión a pesos");
     seen.add(identity);
     rows.push({
       fila: ri + 1, estado, motivo, avisos, identidad: identity, libro: tipo === "emitidos" ? "ventas" : "compras",
       fecha, periodo: fecha.slice(0, 7).replace("-", ""), tipoCbte, signo: sign, puntoVenta, numeroDesde, numeroHasta,
-      cae: normalized(get("Cód. Autorización")), docTipo: docCode(docLabel), docNro: docNro || "0",
-      denominacion: denominacion || "Consumidor final", moneda: normalized(get("Moneda")) || "$",
+      cae: normalized(get("Cód. Autorización")), docTipo, docNro,
+      denominacion: denominacion || "Consumidor final", moneda,
       tipoCambio: Number(get("Tipo Cambio") ?? 1), alicuotas: rates, netoNoGravadoCents, exentoCents,
       otrosTributosCents, totalIvaCents, totalCents, creditoFiscalComputableCents: tipo === "recibidos" && !NON_DISCRIMINATING.has(tipoCbte) ? totalIvaCents : 0, raw,
     });

@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { sql } from "drizzle-orm";
 import { getDb } from "../db/client";
-import { can, moduleEnabled, permissionAllowedForRole, type Action, type ModuleKey } from "./permissions";
+import { can, effectiveModules, moduleEnabled, permissionAllowedForRole, type Action, type ModuleKey } from "./permissions";
 import { HttpError } from "../http";
 
 export type MembershipView = {
@@ -15,6 +15,8 @@ export type MembershipView = {
   city: string | null;
   province: string | null;
   enabledModules: string[];
+  businessSector?: string;
+  tipo?: string;
   blockNegativeStock: boolean;
   roleId: string;
   roleKey: string;
@@ -56,7 +58,9 @@ function asMembership(value: unknown): MembershipView | null {
   if (!row.companyId || !row.roleId) return null;
   return {
     ...row,
-    enabledModules: row.enabledModules ?? [],
+    // Impuestos no se ofrece a negocios de rubro comercio/estación: se filtra acá para que
+    // menú, requirePermission y API usen la misma lista (ver effectiveModules).
+    enabledModules: effectiveModules(row.enabledModules ?? [], row),
     permissions: row.permissions ?? [],
     pointOfSale: Number(row.pointOfSale ?? 1),
   };
@@ -122,6 +126,8 @@ export function publicUser(auth: AuthContext) {
       city: auth.company.city,
       province: auth.company.province,
       modules: auth.company.enabledModules,
+      businessSector: auth.company.businessSector ?? "comercio",
+      tipo: auth.company.tipo ?? "negocio",
       blockNegativeStock: auth.company.blockNegativeStock,
     },
     role: { id: auth.company.roleId, key: auth.company.roleKey, name: auth.company.roleName },

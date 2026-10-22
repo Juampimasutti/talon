@@ -1,12 +1,16 @@
 import { createHash } from "node:crypto";
 import { sql } from "drizzle-orm";
 import type { Tx } from "@/lib/db/tenant";
-import { ImportValidationError, parseMisComprobantesXlsx } from "./mis-comprobantes";
+import { ImportValidationError, parseMisComprobantesXlsx, soloDigitos } from "./mis-comprobantes";
+import { condicionDesdeComprobante, documentoTalon } from "./contraparte-talon";
 
 export type ImportContext = { companyId:string; userId:string; companyCuit:string; canCreateCustomer:boolean; canCreateSupplier:boolean };
 
 export async function importarMisComprobantes(tx:Tx,context:ImportContext,file:Buffer,fileName:string,periodo:string,crearEnTalon=false){
-  const prior=await tx.execute<{identity:string}>(sql`select doc_nro_emisor||'|'||tipo_cbte||'|'||punto_venta||'|'||numero_desde identity from imp_comprobantes`);
+  // Identidad con CUIT sin guiones: la empresa puede tener el CUIT guardado como "30-71458901-2".
+  const prior=await tx.execute<{identity:string}>(sql`select regexp_replace(doc_nro_emisor,'\\D','','g')||'|'||tipo_cbte||'|'||punto_venta||'|'||numero_desde identity from imp_comprobantes`);
+  const companyCuit=soloDigitos(context.companyCuit);
+  const letras=new Map((await tx.execute<{codigo:number;letra:string|null}>(sql`select codigo,letra from imp_tipos_comprobante`)).map(r=>[Number(r.codigo),r.letra]));
   const parsed=parseMisComprobantesXlsx(file,{companyCuit:context.companyCuit,existingIdentities:prior.map(r=>r.identity)});
   if(crearEnTalon && parsed.tipo==="emitidos" && !context.canCreateCustomer) throw new ImportValidationError("Para crear las contrapartes en Talón falta el permiso clientes.crear",403);
   if(crearEnTalon && parsed.tipo==="recibidos" && !context.canCreateSupplier) throw new ImportValidationError("Para crear las contrapartes en Talón falta el permiso proveedores.crear",403);
@@ -23,24 +27,21 @@ export async function importarMisComprobantes(tx:Tx,context:ImportContext,file:B
           on conflict(company_id,doc_tipo,doc_nro) do update set denominacion=excluded.denominacion returning id`);
         counterpartId=counterpart.id;
         if(crearEnTalon){
-          if(parsed.tipo==="emitidos"){
-            const existing=await tx.execute<{id:string}>(sql`select id from customers where company_id=${context.companyId} and cuit=${row.docNro} limit 1`);
-            const party=existing[0]??(await tx.execute<{id:string}>(sql`insert into customers(company_id,code,name,doc_type,cuit,tax_condition)
-              values(${context.companyId},${`IMP-${row.docNro}`},${row.denominacion},${row.docTipo===80?"CUIT":"DNI"},${row.docNro},'cf') returning id`))[0];
-            await tx.execute(sql`update imp_contrapartes set customer_id=${party.id}::uuid where id=${counterpart.id}::uuid`);
-          }else{
-            const existing=await tx.execute<{id:string}>(sql`select id from suppliers where company_id=${context.companyId} and cuit=${row.docNro} limit 1`);
-            const party=existing[0]??(await tx.execute<{id:string}>(sql`insert into suppliers(company_id,code,name,doc_type,cuit,tax_condition)
-              values(${context.companyId},${`IMP-${row.docNro}`},${row.denominacion},${row.docTipo===80?"CUIT":"DNI"},${row.docNro},'cf') returning id`))[0];
-            await tx.execute(sql`update imp_contrapartes set supplier_id=${party.id}::uuid where id=${counterpart.id}::uuid`);
-          }
+          const {taxCondition,revisar}=condicionDesdeComprobante({libro:row.libro,letra:letras.get(row.tipoCbte)??null,docTipo:row.docTipo});
+          const {docType,cuit}=documentoTalon(row.docTipo,row.docNro);
+          const table=parsed.tipo==="emitidos"?sql`customers`:sql`suppliers`;
+          const existing=await tx.execute<{id:string}>(sql`select id from ${table} where company_id=${context.companyId} and regexp_replace(coalesce(cuit,''),'\\D','','g')=${row.docNro} limit 1`);
+          const party=existing[0]??(await tx.execute<{id:string}>(sql`insert into ${table}(company_id,code,name,doc_type,cuit,tax_condition)
+            values(${context.companyId},${`IMP-${row.docNro}`},${row.denominacion},${docType},${cuit},${taxCondition}) returning id`))[0];
+          if(parsed.tipo==="emitidos") await tx.execute(sql`update imp_contrapartes set customer_id=${party.id}::uuid,condicion_a_revisar=${revisar} where id=${counterpart.id}::uuid`);
+          else await tx.execute(sql`update imp_contrapartes set supplier_id=${party.id}::uuid,condicion_a_revisar=${revisar} where id=${counterpart.id}::uuid`);
         }
       }
       const [receipt]=await tx.execute<{id:string}>(sql`insert into imp_comprobantes(company_id,libro,origen,fecha_cbte,periodo,tipo_cbte,punto_venta,numero_desde,numero_hasta,cae,
         doc_nro_emisor,doc_tipo,doc_nro,denominacion,contraparte_id,moneda,tipo_cambio,neto_no_gravado_cents,exento_cents,otros_tributos_cents,total_cents,
         credito_fiscal_computable_cents,requiere_revision,avisos,created_by)
         values(${context.companyId},${row.libro},'mis_comprobantes',${row.fecha}::date,${periodo||row.periodo},${row.tipoCbte},${row.puntoVenta},${row.numeroDesde},${row.numeroHasta},${row.cae},
-        ${row.libro==="ventas"?context.companyCuit:row.docNro},${row.docTipo},${row.docNro},${row.denominacion},${counterpartId}::uuid,${row.moneda},${row.tipoCambio},
+        ${row.libro==="ventas"?companyCuit:row.docNro},${row.docTipo},${row.docNro},${row.denominacion},${counterpartId}::uuid,${row.moneda},${row.tipoCambio},
         ${row.netoNoGravadoCents},${row.exentoCents},${row.otrosTributosCents},${row.totalCents},${row.creditoFiscalComputableCents},
         ${row.avisos.length>0},${JSON.stringify(row.avisos)}::jsonb,${context.userId}::uuid) returning id`);
       comprobanteId=receipt.id;

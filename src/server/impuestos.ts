@@ -6,15 +6,21 @@ import { ImportValidationError } from "@/lib/impuestos/mis-comprobantes";
 import { withTenant } from "@/lib/db/tenant";
 import { HttpError, ok } from "@/lib/http";
 import { readBody } from "@/lib/validation";
-import { calcularLiquidacion } from "@/lib/impuestos/calculos";
+import { calcularLiquidacion, itemsLiquidacion, periodoAnterior, saldosQueArrastra } from "@/lib/impuestos/calculos";
 import { importarMisComprobantes } from "@/lib/impuestos/importar";
 import { traerDeTalon } from "@/lib/impuestos/traer-de-talon";
-import { COMPRAS_ALICUOTAS, COMPRAS_CBTE, VENTAS_ALICUOTAS, VENTAS_CBTE, makeTxt } from "@/lib/impuestos/libro-iva-digital";
+import { toAnsi } from "@/lib/impuestos/libro-iva-digital";
+import { buildLibroIvaDigital } from "@/lib/impuestos/libro-iva-digital/build";
+import { makeZip } from "@/lib/impuestos/libro-iva-digital/zip";
 import * as XLSX from "xlsx";
 
 const period=z.string().regex(/^\d{6}$/,"Período inválido");
 const importSchema=z.object({fileName:z.string().min(1).max(200),base64:z.string().min(1),periodo:period,crearEnTalon:z.boolean().default(false)});
-const confirmSchema=z.object({periodo:period,seguridadSocialCents:z.number().int().default(0),saldoTecnicoAnteriorCents:z.number().int().default(0),saldoLibreAnteriorCents:z.number().int().default(0),retencionesCents:z.number().int().default(0),pagosCuentaCents:z.number().int().default(0),confirmar:z.boolean().default(false)});
+const cents=z.number().int().min(0).max(1e15);
+// Saldos anteriores: si vienen vacíos se toman de la liquidación confirmada del período anterior.
+const confirmSchema=z.object({periodo:period,seguridadSocialCents:cents.default(0),saldoTecnicoAnteriorCents:cents.nullish(),saldoLibreAnteriorCents:cents.nullish(),retencionesCents:cents.default(0),percepcionesCents:cents.default(0),pagosCuentaCents:cents.default(0),confirmar:z.boolean().default(false)});
+const PERIODO_CONFIRMADO="El período ya está confirmado. Para recalcularlo, primero reabrilo indicando el motivo.";
+const fmtPeriodo=(p:string)=>`${p.slice(4)}/${p.slice(0,4)}`;
 const reopenSchema=z.object({periodo:period,motivo:z.string().trim().min(5).max(1000)});
 
 export async function impuestos(method:string,path:string[],req:Request){
@@ -33,10 +39,10 @@ export async function impuestos(method:string,path:string[],req:Request){
     if(libro!=="ventas"&&libro!=="compras") throw new HttpError(400,"Libro inválido");
     const periodo=period.parse(url.searchParams.get("periodo"));
     return withTenant(auth.company.companyId,auth.user.id,async tx=>ok({items:await tx.execute(sql`
-      select c.*,coalesce(jsonb_agg(jsonb_build_object('codigo',a.alicuota_codigo,'netoCents',a.neto_cents,'ivaCents',a.iva_cents)
+      select c.*,t.signo,t.descripcion tipo_descripcion,t.letra,coalesce(jsonb_agg(jsonb_build_object('codigo',a.alicuota_codigo,'netoCents',a.neto_cents,'ivaCents',a.iva_cents)
         order by a.alicuota_codigo) filter(where a.id is not null),'[]') alicuotas
-      from imp_comprobantes c left join imp_comprobante_alicuotas a on a.comprobante_id=c.id
-      where c.libro=${libro} and c.periodo=${periodo} group by c.id order by c.fecha_cbte,c.punto_venta,c.numero_desde`)}));
+      from imp_comprobantes c join imp_tipos_comprobante t on t.codigo=c.tipo_cbte left join imp_comprobante_alicuotas a on a.comprobante_id=c.id
+      where c.libro=${libro} and c.periodo=${periodo} group by c.id,t.signo,t.descripcion,t.letra order by c.fecha_cbte,c.punto_venta,c.numero_desde`)}));
   }
   if(method==="POST"&&resource==="traer-de-talon"){
     const auth=await requirePermission("impuestos","importar"); const body=await readBody(req,z.object({periodo:period}));
@@ -58,19 +64,24 @@ export async function impuestos(method:string,path:string[],req:Request){
   if(method==="GET"&&resource==="exportar"){
     const auth=await requirePermission("impuestos","exportar"); const periodo=period.parse(url.searchParams.get("periodo"));
     return withTenant(auth.company.companyId,auth.user.id,async tx=>{
-      const receipts=await tx.execute<Record<string,unknown>>(sql`select * from imp_comprobantes where periodo=${periodo} and estado='vigente' order by libro,fecha_cbte,punto_venta,numero_desde`);
-      const rates=await tx.execute<Record<string,unknown>>(sql`select a.*,c.libro,c.tipo_cbte,c.punto_venta,c.numero_desde,c.doc_nro from imp_comprobante_alicuotas a join imp_comprobantes c on c.id=a.comprobante_id where c.periodo=${periodo} and c.estado='vigente' order by c.libro,c.fecha_cbte,c.punto_venta,c.numero_desde,a.alicuota_codigo`);
-      const mapReceipt=(r:Record<string,unknown>)=>({fecha:String(r.fecha_cbte),tipoCbte:Number(r.tipo_cbte),puntoVenta:Number(r.punto_venta),numeroDesde:String(r.numero_desde),numeroHasta:String(r.numero_hasta),docTipo:Number(r.doc_tipo),docNro:String(r.doc_nro),denominacion:String(r.denominacion),totalCents:Number(r.total_cents),moneda:String(r.moneda),tipoCambio:Number(r.tipo_cambio),cantidadAlicuotas:rates.filter(a=>a.comprobante_id===r.id).length,creditoFiscalCents:Number(r.credito_fiscal_computable_cents)});
-      const mapRate=(r:Record<string,unknown>)=>({tipoCbte:Number(r.tipo_cbte),puntoVenta:Number(r.punto_venta),numero:String(r.numero_desde),docNro:String(r.doc_nro),netoCents:Number(r.neto_cents),codigo:Number(r.alicuota_codigo),ivaCents:Number(r.iva_cents)});
-      const spreadsheetRows=receipts.map(r=>({Libro:r.libro,Fecha:r.fecha_cbte,Tipo:r.tipo_cbte,"Punto de venta":r.punto_venta,Número:r.numero_desde,Contraparte:r.denominacion,"Total centavos":r.total_cents,"Crédito fiscal centavos":r.credito_fiscal_computable_cents}));
-      const csv=`\uFEFFLibro;Fecha;Tipo;Punto de venta;Número;Contraparte;Total centavos;Crédito fiscal centavos\r\n${spreadsheetRows.map(r=>Object.values(r).map(v=>`"${String(v??"").replaceAll('"','""')}"`).join(";")).join("\r\n")}${spreadsheetRows.length?"\r\n":""}`;
+      const receipts=await tx.execute<Record<string,unknown>>(sql`select * from imp_comprobantes where periodo=${periodo} and estado='vigente' order by libro,fecha_cbte,punto_venta,numero_desde,id`);
+      const rates=await tx.execute<Record<string,unknown>>(sql`select a.* from imp_comprobante_alicuotas a join imp_comprobantes c on c.id=a.comprobante_id where c.periodo=${periodo} and c.estado='vigente' order by a.alicuota_codigo`);
+      const built=buildLibroIvaDigital(receipts,rates);
+      const zip=makeZip(Object.entries(built.files).map(([name,content])=>({name:`${name}_${periodo}.txt`,data:toAnsi(content)})));
+      if(url.searchParams.get("formato")==="zip") return new Response(new Uint8Array(zip),{headers:{"Content-Type":"application/zip","Content-Disposition":`attachment; filename="libro-iva-digital-${periodo}.zip"`,"Cache-Control":"private, no-store"}});
+      const spreadsheetRows=receipts.map(r=>({Libro:r.libro,Fecha:String(r.fecha_cbte).slice(0,10),Tipo:r.tipo_cbte,"Punto de venta":r.punto_venta,Número:r.numero_desde,Contraparte:r.denominacion,Total:Number(r.total_cents)/100,"Crédito fiscal":Number(r.credito_fiscal_computable_cents)/100}));
+      const csv=`\uFEFFLibro;Fecha;Tipo;Punto de venta;Número;Contraparte;Total;Crédito fiscal\r\n${spreadsheetRows.map(r=>Object.values(r).map(v=>`"${(typeof v==="number"?v.toFixed(2).replace(".",","):String(v??"")).replaceAll('"','""')}"`).join(";")).join("\r\n")}${spreadsheetRows.length?"\r\n":""}`;
       const workbook=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(workbook,XLSX.utils.json_to_sheet(spreadsheetRows),"Libro IVA");
-      return ok({periodo,files:{
-        LIBRO_IVA_DIGITAL_VENTAS_CBTE:makeTxt(receipts.filter(r=>r.libro==="ventas").map(mapReceipt),VENTAS_CBTE),
-        LIBRO_IVA_DIGITAL_VENTAS_ALICUOTAS:makeTxt(rates.filter(r=>r.libro==="ventas").map(mapRate),VENTAS_ALICUOTAS),
-        LIBRO_IVA_DIGITAL_COMPRAS_CBTE:makeTxt(receipts.filter(r=>r.libro==="compras").map(mapReceipt),COMPRAS_CBTE),
-        LIBRO_IVA_DIGITAL_COMPRAS_ALICUOTAS:makeTxt(rates.filter(r=>r.libro==="compras").map(mapRate),COMPRAS_ALICUOTAS),
-      },csv,xlsxBase64:XLSX.write(workbook,{type:"base64",bookType:"xlsx"})});
+      return ok({periodo,files:built.files,avisos:built.avisos,zipBase64:zip.toString("base64"),csv,xlsxBase64:XLSX.write(workbook,{type:"base64",bookType:"xlsx"})});
+    });
+  }
+  if(method==="GET"&&resource==="liquidacion"){
+    const auth=await requirePermission("impuestos","ver"); const periodo=period.parse(url.searchParams.get("periodo"));
+    return withTenant(auth.company.companyId,auth.user.id,async tx=>{
+      const [liq]=await tx.execute<Record<string,unknown>>(sql`select * from imp_liquidaciones where periodo=${periodo}`);
+      if(!liq) return ok({liquidacion:null,items:[]});
+      const items=await tx.execute(sql`select rubro,concepto,importe_cents::float8 "importeCents",origen from imp_liquidacion_items where liquidacion_id=${liq.id as string}::uuid order by posicion`);
+      return ok({liquidacion:liq,items});
     });
   }
   if(method==="POST"&&resource==="liquidacion"){
@@ -80,12 +91,30 @@ export async function impuestos(method:string,path:string[],req:Request){
         select c.libro,t.signo,coalesce(sum(a.iva_cents),0)::text iva,c.credito_fiscal_computable_cents::text credito,c.percep_iva_cents::text percep
         from imp_comprobantes c join imp_tipos_comprobante t on t.codigo=c.tipo_cbte left join imp_comprobante_alicuotas a on a.comprobante_id=c.id
         where c.periodo=${body.periodo} and c.estado='vigente' group by c.id,t.signo`);
-      const totals=calcularLiquidacion(rows.map(r=>({libro:r.libro,signo:r.signo as 1|-1,ivaCents:Number(r.iva),creditoComputableCents:r.libro==="compras"?Number(r.credito):undefined,percepIvaCents:Number(r.percep)})),body);
-      const state=body.confirmar?"confirmada":"borrador"; const snapshot=body.confirmar?JSON.stringify({totals,inputs:body}):null;
-      const [saved]=await tx.execute(sql`insert into imp_liquidaciones(company_id,periodo,estado,totales,snapshot,confirmada_por,confirmada_at,created_by)
+      const [actual]=await tx.execute<{estado:string}>(sql`select estado from imp_liquidaciones where periodo=${body.periodo}`);
+      if(actual?.estado==="confirmada") throw new HttpError(409,PERIODO_CONFIRMADO);
+      const anterior=periodoAnterior(body.periodo); const avisos:string[]=[];
+      const [prev]=await tx.execute<{totales:Record<string,unknown>}>(sql`select totales from imp_liquidaciones where periodo=${anterior} and estado='confirmada'`);
+      const arrastre=prev?saldosQueArrastra(prev.totales):null;
+      if(!prev) avisos.push(`No hay liquidación confirmada de ${fmtPeriodo(anterior)}: cargá a mano los saldos a favor del período anterior si corresponde.`);
+      else if(arrastre?.formatoViejo) avisos.push(`La liquidación de ${fmtPeriodo(anterior)} es de una versión anterior: su saldo a favor se tomó como libre disponibilidad. Revisalo.`);
+      const tecnicoManual=body.saldoTecnicoAnteriorCents!=null&&body.saldoTecnicoAnteriorCents!==(arrastre?.saldoTecnicoAnteriorCents??0);
+      const libreManual=body.saldoLibreAnteriorCents!=null&&body.saldoLibreAnteriorCents!==(arrastre?.saldoLibreAnteriorCents??0);
+      if(prev&&(tecnicoManual||libreManual)) avisos.push(`Los saldos anteriores cargados a mano difieren de la liquidación confirmada de ${fmtPeriodo(anterior)}.`);
+      const ajustes={...body,saldoTecnicoAnteriorCents:body.saldoTecnicoAnteriorCents??arrastre?.saldoTecnicoAnteriorCents??0,saldoLibreAnteriorCents:body.saldoLibreAnteriorCents??arrastre?.saldoLibreAnteriorCents??0};
+      const totals={...calcularLiquidacion(rows.map(r=>({libro:r.libro,signo:r.signo as 1|-1,ivaCents:Number(r.iva),creditoComputableCents:r.libro==="compras"?Number(r.credito):undefined,percepIvaCents:Number(r.percep)})),ajustes),periodoAnterior:anterior,saldosAnterioresAutomaticos:Boolean(prev)&&!tecnicoManual&&!libreManual};
+      const items=itemsLiquidacion(totals,{saldoTecnicoAnterior:tecnicoManual||(!prev&&ajustes.saldoTecnicoAnteriorCents>0),saldoLibreAnterior:libreManual||(!prev&&ajustes.saldoLibreAnteriorCents>0),percepciones:body.percepcionesCents>0,retenciones:body.retencionesCents>0,pagosCuenta:body.pagosCuentaCents>0,seguridadSocial:body.seguridadSocialCents>0});
+      const state=body.confirmar?"confirmada":"borrador"; const snapshot=body.confirmar?JSON.stringify({totals,inputs:ajustes,items}):null;
+      let saved:Record<string,unknown>;
+      try{
+        [saved]=await tx.execute<Record<string,unknown>>(sql`insert into imp_liquidaciones(company_id,periodo,estado,totales,snapshot,confirmada_por,confirmada_at,created_by)
         values(${auth.company.companyId},${body.periodo},${state},${JSON.stringify(totals)}::jsonb,${snapshot}::jsonb,${body.confirmar?auth.user.id:null}::uuid,${body.confirmar?new Date().toISOString():null}::timestamptz,${auth.user.id}::uuid)
         on conflict(company_id,periodo) do update set estado=excluded.estado,totales=excluded.totales,snapshot=excluded.snapshot,confirmada_por=excluded.confirmada_por,confirmada_at=excluded.confirmada_at,updated_at=now() returning *`);
-      return ok(saved);
+      }catch(error){ if((error as {code?:string}).code==="55000"||(error as {cause?:{code?:string}}).cause?.code==="55000") throw new HttpError(409,PERIODO_CONFIRMADO); throw error; }
+      await tx.execute(sql`delete from imp_liquidacion_items where liquidacion_id=${saved.id as string}::uuid`);
+      for(const [posicion,item] of items.entries()) await tx.execute(sql`insert into imp_liquidacion_items(company_id,liquidacion_id,rubro,concepto,importe_cents,origen,posicion)
+        values(${auth.company.companyId},${saved.id as string}::uuid,${item.rubro},${item.concepto},${item.importeCents},${item.origen},${posicion})`);
+      return ok({...saved,items,avisos});
     },"exclusive");
   }
   if(method==="POST"&&resource==="reabrir"){

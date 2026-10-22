@@ -1,1 +1,2 @@
-export default async function Page({params}:{params:Promise<{libro:string;periodo:string}>}){const {libro,periodo}=await params;return <main><h1>Libro IVA {libro} · {periodo}</h1><p>Impreso de trabajo generado por Talón.</p></main>}
+import { LibroImpresion } from "@/components/impuestos/impresion-impuestos";
+export default async function Page({params}:{params:Promise<{libro:string;periodo:string}>}){const {libro,periodo}=await params;return <LibroImpresion libro={libro} periodo={periodo}/>;}

@@ -1,21 +1,12 @@
 $ErrorActionPreference = 'Stop'
 $raiz = Split-Path -Parent $PSScriptRoot
 
-function Elegir-Modo {
-  if ($env:TALON_MODO -in @('negocio', 'estudio')) { return $env:TALON_MODO }
-  do {
-    Write-Host ''
-    Write-Host '¿Qué querés instalar?'
-    Write-Host '  N - Negocio'
-    Write-Host '  E - Estudio contable (solo Impuestos; Sueldos próximamente)'
-    $respuesta = (Read-Host 'Elegí N o E').Trim().ToLowerInvariant()
-  } until ($respuesta -in @('n', 'negocio', 'e', 'estudio'))
-  if ($respuesta -in @('e', 'estudio')) { return 'estudio' }
-  return 'negocio'
+# Kit único: no se pregunta nada. Si TALON_MODO ya viene definido (negocio|estudio)
+# se respeta en silencio como override opcional; si no, se instala normal.
+if ($env:TALON_MODO -and ($env:TALON_MODO -notin @('negocio', 'estudio'))) {
+  Write-Host "TALON_MODO='$($env:TALON_MODO)' no es válido; se ignora."
+  Remove-Item Env:TALON_MODO
 }
-
-$env:TALON_MODO = Elegir-Modo
-Write-Host "Talón se preparará en modo $($env:TALON_MODO)."
 $probar = Join-Path $raiz 'PROBAR-TALON.cmd'
 if (-not (Test-Path $probar)) { throw "No se encontró $probar" }
 & $probar

@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { useState } from "react";
 import { toast } from "sonner";
 import { ApiError, apiGet, apiSend, clearSessionCache } from "@/lib/api/client";
-import { ACTIONS, MODULES, actionApplies, can, moduleAvailable } from "@/lib/auth/permissions";
+import { ACTIONS, MODULES, actionApplies, can, moduleAvailable, moduleOfferedForCompany } from "@/lib/auth/permissions";
 import { useMe } from "@/components/use-me";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,7 +24,7 @@ type Config = {
     province: string | null;
     pointOfSale: number;
     blockNegativeStock: boolean;
-    allowNegativeCash?: boolean;
+    allowNegativeCash?: boolean; businessSector?: string; tipo?: string;
     enabledModules: string[];
     cuit: string;
     taxCondition: string;
@@ -130,7 +130,7 @@ function CompanyConfiguration() {
               Permitir caja en negativo
             </label>
             <div className="grid gap-2 sm:grid-cols-2">
-              {MODULES.filter((module) => module.toggle && module.key !== "contabilidad").map((module) => (
+              {MODULES.filter((module) => module.toggle && module.key !== "contabilidad" && moduleOfferedForCompany(module.key, { businessSector: company.businessSector ?? "comercio", tipo: company.tipo ?? "negocio" }) || (module.toggle && !moduleAvailable(module.key))).map((module) => (
                 <label key={module.key} className="flex items-start gap-2 rounded-lg border p-2 text-sm">
                   <input type="checkbox" checked={moduleAvailable(module.key) && company.enabledModules.includes(module.key)} disabled={!editable || !moduleAvailable(module.key)} onChange={() => toggleModule(module.key)} />
                   <span>
