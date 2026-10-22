@@ -1,57 +1,32 @@
 # Módulo de impuestos — Etapa 1
 
-Rama de trabajo: `feat/impuestos-etapa1`.
+Rama: `feat/impuestos-etapa1`.
 
-## F1: esquema y referencias
+## Alcance implementado
 
-Estado: base técnica implementada; referencias oficiales incompletas.
+- **F1:** 19 tablas `imp_` (7 referencias globales y 12 tablas por empresa), módulo optativo, seis permisos y RLS.
+- **F2:** libros IVA Ventas/Compras y “Traer de Talón” idempotente. El proceso lee `documents`, `document_lines` y `document_taxes` y sólo escribe snapshots en tablas `imp_`.
+- **F3:** parser XLSX de Mis Comprobantes por encabezados, validación de CUIT del titular, notas de crédito, B/C sin crédito, residuos, tolerancia de $0,05, contrapartes, deduplicación y alta opcional en Talón apagada por defecto.
+- **F4:** generador declarativo de ancho fijo con CRLF y control de longitud por línea. Se mantienen pendientes la validación externa en ARCA y la revisión manual de los diseños de Ventas contra el PDF oficial vigente.
+- **F5:** cálculo del borrador F.2002, confirmación y bloqueo del período, reapertura con `impuestos.anular`, motivo obligatorio y `audit_log`. Una liquidación confirmada sólo vuelve a borrador mediante esa reapertura.
 
-- Migraciones `0029`, `0030` y `0031` con 22 tablas `imp_`.
-- Esquema Drizzle separado en `src/lib/db/schema-impuestos.ts`.
-- Módulo optativo `impuestos` y seis permisos asignables.
-- Menú y ruta visibles solamente cuando la empresa habilita el módulo y el rol
-  tiene `impuestos.ver`.
-- RLS por empresa en todas las tablas operativas y referencias globales de solo
-  lectura para sesiones autenticadas.
-- Bloqueo en base para comprobantes de períodos cerrados.
-- Tablas propias para libros, importaciones y borradores de liquidación. No se
-  alteraron `documents`, `document_lines`, `document_taxes`, clientes,
-  proveedores ni empresas.
-- Las alícuotas 0%, 2,5%, 5%, 10,5%, 21% y 27% quedaron cargadas con los códigos
-  informados por la tabla del Libro IVA Digital.
+El ejemplo del brief produce un total a pagar de **$5.050,00**.
 
-## Verificación ejecutada
+## Respaldo
 
-- Migración de una base vacía: 31 migraciones y 22 tablas `imp_`.
-- Actualización simulada desde una base con las primeras 28 migraciones: aplicó
-  `0029` a `0031` y terminó con 31.
-- RLS en PostgreSQL: 2/2 pruebas aprobadas, incluida la separación entre dos
-  empresas y un usuario sin permisos de impuestos.
-- Suite general: 99 aprobadas y 16 omitidas por requerir variables de
-  integración.
-- `npm run test:flows`: 14/14 circuitos aprobados, incluidos respaldo,
-  restauración, inmobiliaria y constructora.
-- Build de producción y TypeScript: correctos.
-- Lint: 0 errores y las mismas 4 advertencias conocidas.
+Las 12 tablas `imp_` con `company_id` participan de `company_snapshot` y de la restauración genérica por dependencias. Las 7 referencias globales se recuperan mediante las migraciones de la versión y no se duplican dentro de cada respaldo.
 
-## Pendientes normativos antes de completar F1
+## Referencias y validaciones externas pendientes
 
-El 22 de octubre de 2026, las URLs oficiales de ARCA indicadas en el brief
-respondieron HTTP 403 desde este entorno. Para evitar inventar datos, permanecen
-vacías las tablas de condiciones IVA, tipos de comprobante, códigos de
-operación, monedas, tipos de documento y matriz de letras. Deben cargarse desde
-las tablas oficiales completas y revisarse antes de habilitar el módulo con
-datos fiscales.
+Las fuentes de ARCA devolvieron HTTP 403 desde este entorno. Se cargó únicamente el subconjunto de tipos necesario para los fixtures y las seis alícuotas indicadas explícitamente por el brief. Siguen pendientes la tabla oficial completa, los códigos de operación, monedas, documentos, condiciones IVA y la matriz de letras.
 
-Fuentes a reintentar:
+También siguen pendientes:
 
-- <https://www.arca.gob.ar/libro-iva-digital/documentos/>
-- <https://www.arca.gob.ar/ws/documentacion/manuales.asp>
-- <https://www.arca.gob.ar/fe/documentos/manual-desarrollador-ARCA-COMPG-v4-0.pdf>
+- Importar los TXT en el servicio real Libro IVA Digital con CUIT de prueba.
+- Confirmar contra el PDF vigente cada campo de los registros de Ventas.
+- Criterios del estudio marcados PENDIENTE en el brief (prorrateo anual, comprobantes B/C recibidos, Dec. 814 y antigüedad del crédito fiscal).
+- La comprobación manual en Windows detallada en `docs/impuestos-etapa1-prueba-windows.md`.
 
-## Aislamiento respecto del instalador
+## Aislamiento del instalador
 
-Esta rama no modifica `INSTALAR-TALON.cmd`, `ABRIR-TALON.cmd`, `windows/`,
-`next.config.ts`, `scripts/package-standalone.mjs` ni la documentación de la
-Fase P. La prueba pendiente en otra PC con Windows continúa fuera de este
-trabajo.
+No se modificaron `INSTALAR-TALON.cmd`, `ABRIR-TALON.cmd`, `windows/`, `next.config.ts` ni `scripts/package-standalone.mjs`. La prueba de Fase P en la otra PC continúa en pausa y fuera de esta rama.

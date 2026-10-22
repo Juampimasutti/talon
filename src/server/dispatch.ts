@@ -53,6 +53,7 @@ import { inmobiliaria } from "./inmobiliaria";
 import { reversals } from "./reversals";
 import { companyManagement } from "./company-management";
 import { migracion } from "./migracion";
+import { impuestos } from "./impuestos";
 
 const KIND_MODULE: Record<DocumentKind, ModuleKey> = {
   venta: "ventas",
@@ -103,6 +104,7 @@ export async function dispatch(method: string, path: string[], req: Request): Pr
   if (root === "sync") return sync(method, path, req);
   if (root === "informes") return informes(method, url);
   if (root === "migracion") return migracion(method, path, req);
+  if (root === "impuestos") return impuestos(method, path, req);
   if (root === "importar" || root === "exportar") return exchange(method, path, req);
   if (root === "estacion") return estacion(method, path, req);
 

@@ -8,6 +8,7 @@ const options = [
   { href: "/impuestos/libro/compras", title: "Libro IVA Compras", description: "Comprobantes recibidos y crédito fiscal.", icon: BookOpen },
   { href: "/impuestos/importar", title: "Importar", description: "Mis Comprobantes de ARCA.", icon: FileSpreadsheet },
   { href: "/impuestos/liquidacion", title: "Liquidación", description: "Borrador mensual de IVA.", icon: Calculator },
+  { href: "/impuestos/exportar", title: "Exportar", description: "Archivos del Libro IVA Digital.", icon: FileSpreadsheet },
   { href: "/impuestos/configuracion", title: "Configuración", description: "Puntos de venta, actividades y criterios.", icon: Settings },
 ] as const;
 
@@ -25,12 +26,12 @@ export function ImpuestosScreen() {
       </div>
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Secciones de impuestos">
         {options.map(({ href, title, description, icon: Icon }) => (
-          <div key={href} className="rounded border bg-card p-4">
+          <a key={href} href={href} className="rounded border bg-card p-4 transition-colors hover:border-primary">
             <Icon className="size-5 text-primary" />
             <h2 className="mt-3 font-semibold">{title}</h2>
             <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-            <p className="mt-3 text-xs font-medium text-muted-foreground">Próxima fase</p>
-          </div>
+            <p className="mt-3 text-xs font-medium text-primary">Abrir</p>
+          </a>
         ))}
       </section>
       <p className="text-xs text-muted-foreground">

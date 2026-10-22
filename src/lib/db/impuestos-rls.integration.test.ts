@@ -1,6 +1,8 @@
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import postgres from "postgres";
+import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadEnv } from "../../../scripts/load-env";
 
@@ -37,6 +39,8 @@ describe.skipIf(!enabled)("impuestos RLS", () => {
       DATABASE_URL: urlFor("DATABASE_URL", database),
       ARCA_MODE: "mock",
     };
+    process.env.DATABASE_URL_ADMIN = env.DATABASE_URL_ADMIN;
+    process.env.DATABASE_URL = env.DATABASE_URL;
     execFileSync(process.execPath, ["--import", "tsx", "scripts/migrate.ts"], { env, stdio: "pipe", timeout: 180_000 });
     execFileSync(process.execPath, ["--import", "tsx", "scripts/seed.ts"], { env, stdio: "pipe", timeout: 180_000 });
     admin = postgres(env.DATABASE_URL_ADMIN, { max: 1, onnotice: () => {} });
@@ -80,5 +84,88 @@ describe.skipIf(!enabled)("impuestos RLS", () => {
       await tx`select set_config('app.company_id',${companyA},true),set_config('app.user_id',${mateo},true)`;
       await tx`insert into imp_puntos_venta(company_id,numero,sistema) values(${companyA},1,'manual')`;
     })).rejects.toMatchObject({ code: "42501" });
+  });
+
+  it("sólo cierra al confirmar y exige permiso, motivo y auditoría para reabrir", async () => {
+    await app!.begin(async (tx) => {
+      await tx`select set_config('app.company_id',${companyA},true),set_config('app.user_id',${laura},true)`;
+      await tx`insert into imp_periodos(company_id,periodo) values(${companyA},'202609') on conflict do nothing`;
+    });
+    await expect(app!.begin(async (tx) => {
+      await tx`select set_config('app.company_id',${companyA},true),set_config('app.user_id',${laura},true)`;
+      await tx`update imp_periodos set estado='cerrado' where company_id=${companyA} and periodo='202609'`;
+    })).rejects.toMatchObject({code:"55000"});
+    await app!.begin(async (tx) => {
+      await tx`select set_config('app.company_id',${companyA},true),set_config('app.user_id',${laura},true)`;
+      await tx`insert into imp_liquidaciones(company_id,periodo,estado,totales,snapshot,confirmada_por,confirmada_at,created_by)
+        values(${companyA},'202609','confirmada','{}','{}',${laura},now(),${laura})`;
+      const [closed]=await tx`select estado from imp_periodos where company_id=${companyA} and periodo='202609'`;
+      expect(closed.estado).toBe("cerrado");
+    });
+    await expect(app!.begin(async (tx) => {
+      await tx`select set_config('app.company_id',${companyA},true),set_config('app.user_id',${laura},true)`;
+      await tx`update imp_liquidaciones set estado='borrador',snapshot=null,confirmada_por=null,confirmada_at=null where company_id=${companyA} and periodo='202609'`;
+    })).rejects.toMatchObject({code:"55000"});
+    await expect(app!.begin(async (tx) => {
+      await tx`select set_config('app.company_id',${companyA},true),set_config('app.user_id',${laura},true)`;
+      await tx`select imp_reabrir_periodo('202609','x')`;
+    })).rejects.toMatchObject({code:"22023"});
+    await app!.begin(async (tx) => {
+      await tx`select set_config('app.company_id',${companyA},true),set_config('app.user_id',${laura},true)`;
+      await tx`select imp_reabrir_periodo('202609','Corrección solicitada por el estudio')`;
+      const [periodRow]=await tx`select estado from imp_periodos where company_id=${companyA} and periodo='202609'`;
+      const [settlement]=await tx`select estado from imp_liquidaciones where company_id=${companyA} and periodo='202609'`;
+      const [audit]=await tx`select metadata->>'motivo' motivo from audit_log where company_id=${companyA} and action='impuestos.reabrir' order by created_at desc limit 1`;
+      expect(periodRow.estado).toBe("abierto"); expect(settlement.estado).toBe("borrador");
+      expect(audit.motivo).toBe("Corrección solicitada por el estudio");
+    });
+    await expect(app!.begin(async (tx) => {
+      await tx`select set_config('app.company_id',${companyA},true),set_config('app.user_id',${mateo},true)`;
+      await tx`select imp_reabrir_periodo('202609','Intento sin autorización')`;
+    })).rejects.toMatchObject({code:"42501"});
+  });
+
+  it("incluye las 12 tablas tenant de impuestos en respaldo y restauración dinámica", async () => {
+    const [snapshot]=await admin!`select company_snapshot(${companyA}) data`;
+    const tenantTables=["imp_config","imp_puntos_venta","imp_actividades","imp_contrapartes","imp_mapeo_tributos","imp_periodos","imp_import_jobs","imp_comprobantes","imp_comprobante_alicuotas","imp_import_rows","imp_liquidaciones","imp_liquidacion_items"];
+    for(const table of tenantTables) expect(snapshot.data).toHaveProperty(table);
+  });
+
+  it("Traer de Talón no modifica ninguna tabla operativa de Talón", async () => {
+    const [sample]=await admin!`select to_char(issued_on,'YYYYMM') period from documents where company_id=${companyA} and kind in ('venta','compra') order by issued_on limit 1`;
+    if(!sample) return;
+    const tableRows=await admin!`select distinct table_name from information_schema.columns where table_schema='public' and column_name='company_id' and table_name not like 'imp\_%' escape '\' order by table_name`;
+    const checksum=async()=>Object.fromEntries(await Promise.all(tableRows.map(async({table_name})=>{
+      const [row]=await admin!.unsafe(`select md5(coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text)::text,'[]')) hash from public."${table_name}" t where company_id='${companyA}'`);
+      return [table_name,row.hash] as const;
+    })));
+    const before=await checksum();
+    const {getDb}=await import("./client"); const {traerDeTalon}=await import("@/lib/impuestos/traer-de-talon");
+    await getDb().transaction(async tx=>{
+      await tx.execute(sql`select set_config('app.company_id',${companyA},true),set_config('app.user_id',${laura},true)`);
+      await traerDeTalon(tx,companyA,laura,sample.period);
+    });
+    expect(await checksum()).toEqual(before);
+  });
+
+  it("importa con el alta en Talón apagada/prendida y reimporta como duplicado", async () => {
+    const {getDb}=await import("./client"); const {importarMisComprobantes}=await import("@/lib/impuestos/importar");
+    const emitted=readFileSync("src/lib/impuestos/__fixtures__/mis-comprobantes-emitidos-ejemplo.xlsx");
+    const received=readFileSync("src/lib/impuestos/__fixtures__/mis-comprobantes-recibidos-ejemplo.xlsx");
+    const before=(await admin!`select (select count(*)::int from customers where company_id=${companyA}) customers,(select count(*)::int from suppliers where company_id=${companyA}) suppliers`)[0];
+    const run=(file:Buffer,name:string,also:boolean)=>getDb().transaction(async tx=>{
+      await tx.execute(sql`select set_config('app.company_id',${companyA},true),set_config('app.user_id',${laura},true)`);
+      return importarMisComprobantes(tx,{companyId:companyA,userId:laura,companyCuit:"20111111112",canCreateCustomer:true,canCreateSupplier:true},file,name,"202609",also);
+    });
+    const first=await run(emitted,"emitidos.xlsx",false);
+    const afterOff=(await admin!`select count(*)::int customers from customers where company_id=${companyA}`)[0];
+    expect(first.rechazados).toBe(0); expect(afterOff.customers).toBe(before.customers);
+    const repeated=await run(emitted,"emitidos.xlsx",false);
+    expect(repeated.ok).toBe(0); expect(repeated.duplicados).toBe(first.ok+first.duplicados);
+    const on=await run(received,"recibidos.xlsx",true);
+    const afterOn=(await admin!`select count(*)::int suppliers from suppliers where company_id=${companyA}`)[0];
+    expect(on.rechazados).toBe(0); expect(afterOn.suppliers).toBeGreaterThanOrEqual(before.suppliers);
+    const [linked]=await admin!`select count(*)::int count from imp_contrapartes where company_id=${companyA} and supplier_id is not null`;
+    expect(linked.count).toBeGreaterThan(0);
   });
 });
