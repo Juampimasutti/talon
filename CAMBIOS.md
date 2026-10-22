@@ -2,6 +2,8 @@
 
 ## Pulido de estudio y configuración fiscal
 
+- Configuración del estudio ya no muestra “General”; Auditoría es su único subítem y conserva `auditoria.ver`.
+- Se quitó el selector transversal de las pantallas fiscales. Libro IVA Ventas y Liquidación quedan dentro de Ventas; Libro IVA Compras queda dentro de Compras.
 - Informes queda deshabilitado para estudios desde la sesión y la API, incluso si una instalación anterior lo conserva en `enabled_modules`.
 - Auditoría se muestra dentro de Configuración en el menú del estudio, pero conserva su permiso `auditoria.ver` y su ruta independiente.
 - El encabezado identifica el entorno como “Estudio contable”.

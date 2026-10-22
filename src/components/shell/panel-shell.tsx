@@ -138,8 +138,7 @@ export function PanelShell({ children }: { children: React.ReactNode }) {
   const data = session;
   const items = visibleModules(data.company.modules, data.permissions).filter((item) => !(isStudy && item.key === "dashboard"));
   const studyCanAudit = isStudy && items.some((item) => item.key === "auditoria");
-  const studyHasConfig = isStudy && items.some((item) => item.key === "configuracion");
-  const navItems = isStudy ? items.filter((item) => item.key !== "auditoria") : items;
+  const navItems = isStudy ? items.filter((item) => item.key !== "auditoria" && item.key !== "configuracion") : items;
   const selectedTaxCompany = empresaIdFromPath(pathname) ?? rememberedTaxCompany;
   const selectedCompany = companies.data?.items.find((item) => item.id === selectedTaxCompany) ?? null;
 
@@ -166,7 +165,6 @@ export function PanelShell({ children }: { children: React.ReactNode }) {
         const Icon = ICONS[item.key] ?? FileText;
         const active = pathname === href || pathname.startsWith(`${href}/`);
         if (item.key === "impuestos" && isStudy) return <StudyTaxNav key={item.key} pathname={pathname} close={() => setOpen(false)} selected={selectedCompany} />;
-        if (item.key === "configuracion" && isStudy) return <StudyConfigNav key={item.key} pathname={pathname} close={() => setOpen(false)} showConfig showAudit={studyCanAudit} />;
         return (
           <Link
             key={item.key}
@@ -180,7 +178,7 @@ export function PanelShell({ children }: { children: React.ReactNode }) {
           </Link>
         );
       })}
-      {isStudy && studyCanAudit && !studyHasConfig ? <StudyConfigNav pathname={pathname} close={() => setOpen(false)} showConfig={false} showAudit /> : null}
+      {studyCanAudit ? <StudyConfigNav pathname={pathname} close={() => setOpen(false)} /> : null}
       {items.some((item) => item.key === "articulos") ? (
         <Link href="/listas" onClick={() => setOpen(false)} aria-current={pathname.startsWith("/listas") ? "page" : undefined} className="talon-nav-link">
           <Package className="size-4" />
@@ -279,13 +277,12 @@ function StudyTaxNav({ pathname, close, selected }: { pathname: string; close: (
   </>;
 }
 
-function StudyConfigNav({ pathname, close, showConfig, showAudit }: { pathname: string; close: () => void; showConfig: boolean; showAudit: boolean }) {
-  const active = pathname === "/configuracion" || pathname.startsWith("/configuracion/") || pathname === "/auditoria" || pathname.startsWith("/auditoria/");
+function StudyConfigNav({ pathname, close }: { pathname: string; close: () => void }) {
+  const active = pathname === "/auditoria" || pathname.startsWith("/auditoria/");
   return <details className="group" open={active || undefined}>
     <summary className={`talon-nav-link cursor-pointer list-none ${active ? "bg-sidebar-accent text-sidebar-accent-foreground" : ""}`}><Settings className="size-4" />Configuración</summary>
     <div className="ml-5 grid gap-0.5 border-l border-sidebar-border pl-2">
-      {showConfig ? <Link href="/configuracion" onClick={close} aria-current={pathname.startsWith("/configuracion") ? "page" : undefined} className="rounded px-2 py-1.5 text-xs hover:bg-sidebar-accent aria-[current=page]:bg-sidebar-accent">General</Link> : null}
-      {showAudit ? <Link href="/auditoria" onClick={close} aria-current={pathname.startsWith("/auditoria") ? "page" : undefined} className="rounded px-2 py-1.5 text-xs hover:bg-sidebar-accent aria-[current=page]:bg-sidebar-accent">Auditoría</Link> : null}
+      <Link href="/auditoria" onClick={close} aria-current={pathname.startsWith("/auditoria") ? "page" : undefined} className="rounded px-2 py-1.5 text-xs hover:bg-sidebar-accent aria-[current=page]:bg-sidebar-accent">Auditoría</Link>
     </div>
   </details>;
 }
