@@ -9,7 +9,7 @@ describe("modo negocio / estudio", () => {
     expect(defaultCompanyMode({ TALON_MODO: "otro" })).toBe("negocio");
   });
   it("estudio fuerza sólo impuestos; negocio respeta lo pedido", () => {
-    expect(modulesForMode("estudio", ["ventas", "stock"])).toEqual(["impuestos"]);
+    expect(modulesForMode("estudio", ["ventas", "stock", "informes"])).toEqual(["impuestos"]);
     expect(modulesForMode("negocio", ["ventas"])).toEqual(["ventas"]);
   });
   it("sueldos es un placeholder: no es un módulo habilitable", () => {

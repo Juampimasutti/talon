@@ -21,4 +21,9 @@ describe("Impuestos según rubro", () => {
     expect(effectiveModules(["impuestos"], { tipo: "estudio", businessSector: null })).toEqual(["impuestos"]);
     expect(effectiveModules(["impuestos"], { tipo: "estudio" })).toEqual(["impuestos"]);
   });
+  it("un estudio nunca habilita Informes aunque figure en la base", () => {
+    expect(moduleOfferedForCompany("informes", { tipo: "estudio" })).toBe(false);
+    expect(effectiveModules(["impuestos", "informes", "auditoria"], { tipo: "estudio" })).toEqual(["impuestos", "auditoria"]);
+    expect(moduleOfferedForCompany("informes", { tipo: "negocio", businessSector: "comercio" })).toBe(true);
+  });
 });

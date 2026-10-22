@@ -2,6 +2,9 @@
 
 ## Pulido de estudio y configuración fiscal
 
+- Informes queda deshabilitado para estudios desde la sesión y la API, incluso si una instalación anterior lo conserva en `enabled_modules`.
+- Auditoría se muestra dentro de Configuración en el menú del estudio, pero conserva su permiso `auditoria.ver` y su ruta independiente.
+- El encabezado identifica el entorno como “Estudio contable”.
 - En modo estudio, “Empresas” reemplaza al tablero y muestra tarjetas de clientes. “Impuestos” contiene Ventas, Compras y Configuración de la empresa seleccionada.
 - El nombre y CUIT seleccionados permanecen visibles en escritorio y celular. La selección se conserva al navegar.
 - Un puesto sin `impuestos.ver` no ve Empresas ni Impuestos y entra en Configuración en vez de caer en “Sin permiso”.

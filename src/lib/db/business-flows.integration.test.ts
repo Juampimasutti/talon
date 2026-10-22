@@ -492,12 +492,14 @@ describe.skipIf(!enabled)(
       // Modo estudio desde el alta: sólo Impuestos, el creador queda como Contador.
       const estudio = (await request("empresas", { ...input, name: "Estudio QA", legalName: "Estudio QA SRL", cuit: buildCuit("30", "67458902"), tipo: "estudio", businessSector: undefined, enabledModules: ["ventas", "stock"] })) as { id: string };
       await request("auth/empresa", { companyId: estudio.id });
+      await sql!`update companies set enabled_modules=array_append(enabled_modules,'informes') where id=${estudio.id}`;
       const estudioMe = await request("auth/me");
       expect(estudioMe.role.key).toBe("contador");
       expect(estudioMe.company.modules).toEqual(["impuestos"]);
       const [estudioRow] = await sql!`select tipo from companies where id=${estudio.id}`;
       expect(estudioRow.tipo).toBe("estudio");
       await request("clientes", undefined, 403);
+      await request("informes?tipo=ventas", undefined, 403);
       // Liquidación IVA: el saldo técnico a favor de agosto se arrastra solo a septiembre
       // y reproduce el ejemplo (saldo a pagar $ 5.050,00); el período confirmado no se recalcula.
       let nro = 0;

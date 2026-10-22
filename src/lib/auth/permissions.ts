@@ -47,6 +47,7 @@ export type CompanyKind = { businessSector?: string | null; tipo?: string | null
 /** ¿El módulo se ofrece a esta empresa (menú, Configuración y API)? */
 export function moduleOfferedForCompany(moduleKey: string, company: CompanyKind): boolean {
   if (!moduleAvailable(moduleKey)) return false;
+  if (moduleKey === "informes" && company.tipo === "estudio") return false;
   if (moduleKey === "impuestos" && company.tipo !== "estudio") {
     return !IMPUESTOS_HIDDEN_SECTORS.includes(company.businessSector ?? "comercio");
   }
