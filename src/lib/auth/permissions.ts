@@ -21,17 +21,24 @@ export const MODULES = [
   { key: "reparto", label: "Reparto", hint: "Camiones propios y entrega a granel", toggle: true },
   { key: "informes", label: "Informes", hint: "Ventas, IVA, caja, stock y rentabilidad", toggle: true },
   { key: "impuestos", label: "Impuestos", hint: "Libros IVA y liquidación mensual", toggle: true },
+  { key: "sueldos", label: "Sueldos", hint: "Próximamente para estudios contables", toggle: true, available: false },
   { key: "auditoria", label: "Auditoría", hint: "Quién hizo cada cosa", toggle: true },
   { key: "configuracion", label: "Configuración", hint: "Empresa, módulos, roles y campos", toggle: false },
 ] as const;
 
 export type ModuleKey = (typeof MODULES)[number]["key"];
 
+export function moduleAvailable(moduleKey: string): boolean {
+  const definition = MODULES.find((item) => item.key === moduleKey);
+  return Boolean(definition && (!("available" in definition) || definition.available !== false));
+}
+
 export function permissionKey(moduleKey: string, action: string): string {
   return `${moduleKey}.${action}`;
 }
 
 export function actionApplies(moduleKey: string, action: string): boolean {
+  if (!moduleAvailable(moduleKey)) return false;
   if (moduleKey === "dashboard") return action === "ver";
   if (moduleKey === "auditoria") return action === "ver" || action === "exportar";
   return true;
@@ -51,13 +58,32 @@ function readExport(modules: readonly string[]): string[] {
   return modules.flatMap((moduleKey) => [permissionKey(moduleKey, "ver"), permissionKey(moduleKey, "exportar")]);
 }
 
-const OPERATIONAL = MODULES.map((moduleKey) => moduleKey.key).filter((key) => key !== "dashboard");
+const OPERATIONAL = MODULES.map((moduleKey) => moduleKey.key).filter((key) => key !== "dashboard" && moduleAvailable(key));
+
+/**
+ * Módulos cuyo acceso queda reservado a un único puesto (clave de rol).
+ * Impuestos (Libro IVA y liquidación) es tarea del contador: ningún otro puesto,
+ * ni siquiera Administración o un puesto personalizado, puede tener impuestos.*.
+ * Se aplica en tres capas: plantillas de puestos, sesión (menú y API) y base de datos
+ * (trigger en role_permissions, migración 0035).
+ */
+export const ROLE_EXCLUSIVE_MODULES: Readonly<Record<string, string>> = { impuestos: "contador" };
+
+export function permissionAllowedForRole(roleKey: string | null | undefined, permission: string): boolean {
+  const moduleKey = permission.split(".")[0];
+  const onlyRole = ROLE_EXCLUSIVE_MODULES[moduleKey];
+  return !onlyRole || onlyRole === roleKey;
+}
+
+function modulePermissions(moduleKey: string): string[] {
+  return allPermissions().filter((permission) => permission.startsWith(`${moduleKey}.`));
+}
 
 export const ROLE_TEMPLATES: Record<string, { name: string; description: string; permissions: string[] }> = {
   admin: {
     name: "Administración",
-    description: "Maneja la empresa completa.",
-    permissions: allPermissions(),
+    description: "Maneja la empresa completa (Impuestos queda reservado al contador).",
+    permissions: allPermissions().filter((permission) => permissionAllowedForRole("admin", permission)),
   },
   vendedor: {
     name: "Vendedor de mostrador",
@@ -192,8 +218,16 @@ export const ROLE_TEMPLATES: Record<string, { name: string; description: string;
   },
   contador: {
     name: "Contador",
-    description: "Consulta y exporta. No carga ni anula.",
-    permissions: ["dashboard.ver", ...readExport(OPERATIONAL), "contabilidad.crear", "contabilidad.editar"],
+    description: "Consulta y exporta. Lleva el módulo Impuestos completo (libros IVA y liquidación).",
+    permissions: [
+      ...new Set([
+        "dashboard.ver",
+        ...readExport(OPERATIONAL),
+        "contabilidad.crear",
+        "contabilidad.editar",
+        ...modulePermissions("impuestos"),
+      ]),
+    ],
   },
 };
 
@@ -206,6 +240,7 @@ export function can(permissions: Iterable<string>, moduleKey: string, action: st
 }
 
 export function moduleEnabled(enabled: readonly string[], moduleKey: string): boolean {
+  if (!moduleAvailable(moduleKey)) return false;
   if (moduleKey === "contabilidad") return false; // No hay asientos automáticos todavía.
   if (moduleKey === "dashboard" || moduleKey === "configuracion") return true;
   return enabled.includes(moduleKey);
@@ -221,5 +256,13 @@ export function permissionDelta(current: readonly string[], next: readonly strin
   return {
     grant: next.filter((permission) => !have.has(permission)),
     revoke: current.filter((permission) => !wanted.has(permission)),
+  };
+}
+
+/** Diferencia de módulos para auditar el encendido/apagado desde Configuración. */
+export function moduleToggleDelta(before: readonly string[], after: readonly string[]) {
+  return {
+    turnedOn: after.filter((key) => !before.includes(key)),
+    turnedOff: before.filter((key) => !after.includes(key)),
   };
 }

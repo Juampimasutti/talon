@@ -10,7 +10,7 @@ import {
   primeSession,
   type Me,
 } from "@/lib/api/client";
-import { SECTORS } from "@/lib/company-setup";
+import { ESTUDIO_FUTURE_MODULES, ESTUDIO_MODULES, SECTORS, type CompanyMode } from "@/lib/company-setup";
 import { MODULES } from "@/lib/auth/permissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,7 +28,7 @@ const initial = {
   activityStartedOn: "",
 };
 
-export function CompanyCreateForm() {
+export function CompanyCreateForm({ defaultMode = "negocio" }: { defaultMode?: CompanyMode }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [pending, setPending] = useState(false);
@@ -37,6 +37,7 @@ export function CompanyCreateForm() {
   const [modules, setModules] = useState<string[]>([
     ...SECTORS.comercio.modules,
   ]);
+  const [tipo, setTipo] = useState<CompanyMode>(defaultMode);
   const [points, setPoints] = useState("1");
   const [basicLedger, setBasicLedger] = useState(false);
   return (
@@ -51,8 +52,9 @@ export function CompanyCreateForm() {
             .map((point) => Number(point.trim()));
           await apiSend("/api/empresas", "POST", {
             ...form,
+            tipo,
             businessSector: sector,
-            enabledModules: modules,
+            enabledModules: tipo === "estudio" ? [...ESTUDIO_MODULES] : modules,
             pointsOfSale,
             basicLedger,
           });
@@ -62,7 +64,7 @@ export function CompanyCreateForm() {
           primeSession(next);
           queryClient.setQueryData(["me"], next);
           toast.success(`Empresa «${next.company.name}» creada. Ahora estás trabajando en ella.`, { duration: 8000 });
-          router.push("/tablero");
+          router.push(tipo === "estudio" ? "/impuestos" : "/tablero");
           router.refresh();
         } catch (error) {
           toast.error(
@@ -77,7 +79,24 @@ export function CompanyCreateForm() {
     >
       <h3 className="font-semibold">Nueva empresa</h3>
       <p className="text-sm text-muted-foreground">Al crearla, pasarás a trabajar en la nueva empresa. Podés volver a la anterior desde el selector del menú.</p>
-      <label className="grid gap-1 text-sm">
+      <fieldset className="grid gap-1 text-sm">
+        <legend className="mb-1 font-semibold">¿Negocio o Estudio contable?</legend>
+        {(
+          [
+            ["negocio", "Negocio", "Ventas, stock, caja y el resto de los módulos según el rubro."],
+            ["estudio", "Estudio contable", "Sólo Impuestos (Libro IVA, importación de ARCA). Vas a quedar como Contador."],
+          ] as const
+        ).map(([key, label, hint]) => (
+          <label key={key} className="flex items-start gap-2">
+            <input type="radio" name="tipo" value={key} checked={tipo === key} onChange={() => setTipo(key)} />
+            <span>
+              <span className="font-semibold">{label}</span>
+              <span className="block text-muted-foreground">{hint}</span>
+            </span>
+          </label>
+        ))}
+      </fieldset>
+      <label className="grid gap-1 text-sm" hidden={tipo === "estudio"}>
         Rubro
         <select
           className="h-8 rounded border px-2"
@@ -142,6 +161,15 @@ export function CompanyCreateForm() {
           placeholder="1, 2"
         />
       </label>
+      {tipo === "estudio" ? (
+        <div className="grid gap-1 text-sm">
+          <span className="font-semibold">Módulos del estudio</span>
+          <span>✓ Impuestos</span>
+          {ESTUDIO_FUTURE_MODULES.map((item) => (
+            <span key={item.key} className="text-muted-foreground">○ {item.label}</span>
+          ))}
+        </div>
+      ) : (
       <fieldset className="grid gap-2 sm:grid-cols-2">
         <legend className="mb-2 text-sm font-semibold">Módulos activos</legend>
         {MODULES.filter(
@@ -163,6 +191,7 @@ export function CompanyCreateForm() {
           </label>
         ))}
       </fieldset>
+      )}
       <label className="flex gap-2 text-sm">
         <input
           type="checkbox"
@@ -172,7 +201,7 @@ export function CompanyCreateForm() {
         Preparar plan de cuentas básico (sin asientos automáticos)
       </label>
       <p className="text-sm text-muted-foreground">
-        Vas a quedar como administrador. Después podés sumar otro usuario desde
+        {tipo === "estudio" ? "Vas a quedar como Contador." : "Vas a quedar como administrador."} Después podés sumar otro usuario desde
         la pestaña Usuarios. Los comprobantes empiezan sin facturación
         electrónica.
       </p>
@@ -186,7 +215,7 @@ export function CompanyCreateForm() {
 export function NewCompanyScreen() {
   const capabilities = useQuery({
     queryKey: ["company-capabilities-standalone"],
-    queryFn: () => apiGet<{ canCreate: boolean }>("/api/empresas/capacidades"),
+    queryFn: () => apiGet<{ canCreate: boolean; defaultMode?: CompanyMode }>("/api/empresas/capacidades"),
     retry: false,
   });
   return (
@@ -195,7 +224,7 @@ export function NewCompanyScreen() {
       {capabilities.isPending ? (
         <p>Cargando…</p>
       ) : capabilities.data?.canCreate ? (
-        <CompanyCreateForm />
+        <CompanyCreateForm defaultMode={capabilities.data.defaultMode} />
       ) : (
         <p role="alert">
           {capabilities.error?.message ??

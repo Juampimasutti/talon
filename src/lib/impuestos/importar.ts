@@ -1,15 +1,15 @@
 import { createHash } from "node:crypto";
 import { sql } from "drizzle-orm";
 import type { Tx } from "@/lib/db/tenant";
-import { parseMisComprobantesXlsx } from "./mis-comprobantes";
+import { ImportValidationError, parseMisComprobantesXlsx } from "./mis-comprobantes";
 
 export type ImportContext = { companyId:string; userId:string; companyCuit:string; canCreateCustomer:boolean; canCreateSupplier:boolean };
 
 export async function importarMisComprobantes(tx:Tx,context:ImportContext,file:Buffer,fileName:string,periodo:string,crearEnTalon=false){
   const prior=await tx.execute<{identity:string}>(sql`select doc_nro_emisor||'|'||tipo_cbte||'|'||punto_venta||'|'||numero_desde identity from imp_comprobantes`);
   const parsed=parseMisComprobantesXlsx(file,{companyCuit:context.companyCuit,existingIdentities:prior.map(r=>r.identity)});
-  if(crearEnTalon && parsed.tipo==="emitidos" && !context.canCreateCustomer) throw new Error("Falta el permiso clientes.crear");
-  if(crearEnTalon && parsed.tipo==="recibidos" && !context.canCreateSupplier) throw new Error("Falta el permiso proveedores.crear");
+  if(crearEnTalon && parsed.tipo==="emitidos" && !context.canCreateCustomer) throw new ImportValidationError("Para crear las contrapartes en Talón falta el permiso clientes.crear",403);
+  if(crearEnTalon && parsed.tipo==="recibidos" && !context.canCreateSupplier) throw new ImportValidationError("Para crear las contrapartes en Talón falta el permiso proveedores.crear",403);
   const hash=createHash("sha256").update(file).digest("hex");
   const [job]=await tx.execute<{id:string}>(sql`insert into imp_import_jobs(company_id,tipo,archivo_nombre,archivo_hash,estado,resumen,created_by)
     values(${context.companyId},${parsed.tipo==="emitidos"?"mc_emitidos":"mc_recibidos"},${fileName},${hash},'procesando',${JSON.stringify(parsed.resumen)}::jsonb,${context.userId}::uuid) returning id`);

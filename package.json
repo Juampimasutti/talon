@@ -17,6 +17,7 @@
     "test:flows": "npm run build && RUN_FLOW_TESTS=1 vitest run src/lib/db/business-flows.integration.test.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
+    "talon:modo": "tsx scripts/talon-modo.ts",
     "db:explain": "tsx scripts/explain.ts",
     "measure:bundle": "node scripts/measure-bundle.mjs",
     "measure:renders": "vitest run src/lib/ui/render-budget.test.tsx",

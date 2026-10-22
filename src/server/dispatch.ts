@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { z } from "zod";
 import { hashPassword } from "@/lib/auth/password";
 import { verifyPassword } from "@/lib/auth/password";
-import { MODULES, allPermissions, can, moduleEnabled, type ModuleKey } from "@/lib/auth/permissions";
+import { MODULES, allPermissions, can, moduleAvailable, moduleEnabled, moduleToggleDelta, permissionAllowedForRole, type ModuleKey } from "@/lib/auth/permissions";
 import { authFromToken, clearSession, getAuth, publicUser, requirePermission, startSession, switchCompany } from "@/lib/auth/session";
 import { withTenant, type Tx } from "@/lib/db/tenant";
 import { getDb } from "@/lib/db/client";
@@ -1335,9 +1335,11 @@ async function configuracion(method: string, req: Request) {
   if (method === "PATCH") {
     const auth = await requirePermission("configuracion", "editar");
     const body = await readBody(req, companySchema);
-    const allowed = new Set<string>(MODULES.filter((moduleKey) => moduleKey.toggle).map((moduleKey) => moduleKey.key));
+    const allowed = new Set<string>(MODULES.filter((moduleKey) => moduleKey.toggle && moduleAvailable(moduleKey.key)).map((moduleKey) => moduleKey.key));
     const enabledModules = body.enabledModules.filter((moduleKey) => allowed.has(moduleKey as ModuleKey));
     return withTenant(auth.company.companyId, auth.user.id, async (tx) => {
+      const [before] = await tx.select({ enabledModules: companies.enabledModules }).from(companies).where(eq(companies.id, auth.company.companyId));
+      const { turnedOn, turnedOff } = moduleToggleDelta(before?.enabledModules ?? [], enabledModules);
       const [row] = await tx
         .update(companies)
         .set({
@@ -1361,7 +1363,10 @@ async function configuracion(method: string, req: Request) {
         action: "configuracion.editar",
         entity: "empresa",
         entityId: auth.company.companyId,
-        summary: "Actualizó los datos y módulos de la empresa",
+        summary: turnedOn.length || turnedOff.length
+          ? `Actualizó la empresa. Módulos activados: ${turnedOn.join(", ") || "ninguno"}; desactivados: ${turnedOff.join(", ") || "ninguno"} (los datos se conservan)`
+          : "Actualizó los datos de la empresa",
+        metadata: { modulos: { activados: turnedOn, desactivados: turnedOff } },
       });
       return ok(row);
     });
@@ -1559,6 +1564,15 @@ async function rolesRoute(method: string, id: string | undefined, req: Request) 
       throw new HttpError(400, "No te saques el permiso de editar la configuración: te quedarías afuera.");
     }
     return withTenant(auth.company.companyId, auth.user.id, async (tx) => {
+      const [current] = await tx
+        .select({ key: roles.key })
+        .from(roles)
+        .where(and(eq(roles.id, id), eq(roles.companyId, auth.company.companyId)));
+      if (!current) throw new HttpError(404, "No encontramos el puesto");
+      const reserved = permissions.filter((permission) => !permissionAllowedForRole(current.key, permission));
+      if (reserved.length) {
+        throw new HttpError(400, "Los permisos de Impuestos son exclusivos del puesto Contador.", { permisos: reserved });
+      }
       const [role] = await tx
         .update(roles)
         .set({ name: body.name, description: body.description, isSystem: false })

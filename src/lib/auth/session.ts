@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { sql } from "drizzle-orm";
 import { getDb } from "../db/client";
-import { can, moduleEnabled, type Action, type ModuleKey } from "./permissions";
+import { can, moduleEnabled, permissionAllowedForRole, type Action, type ModuleKey } from "./permissions";
 import { HttpError } from "../http";
 
 export type MembershipView = {
@@ -90,7 +90,9 @@ export async function authFromToken(token: string, requestedCompanyId?: string):
     user: ctx.user,
     memberships,
     company,
-    permissions: new Set(company.permissions),
+    // Los módulos exclusivos de un puesto (Impuestos → contador) se filtran acá:
+    // así quedan fuera del menú y de requirePermission aunque la base tuviera otra cosa.
+    permissions: new Set(company.permissions.filter((permission) => permissionAllowedForRole(company.roleKey, permission))),
     rlsEnforced: await roleEnforcesRls(),
   };
 }

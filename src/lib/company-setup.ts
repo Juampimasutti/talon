@@ -72,7 +72,34 @@ export const SECTORS = {
   },
 } as const;
 
+/**
+ * Modo de instalación de la empresa.
+ * - "negocio": el comportamiento de siempre (módulos según rubro).
+ * - "estudio": estudio contable; sólo el módulo Impuestos. Sueldos se sumará acá
+ *   cuando exista (hoy no hay módulo, por eso no se habilita).
+ */
+export const COMPANY_MODES = ["negocio", "estudio"] as const;
+export type CompanyMode = (typeof COMPANY_MODES)[number];
+export const ESTUDIO_MODULES = ["impuestos"] as const;
+/** Módulos previstos para estudios que todavía no existen. No se habilitan. */
+export const ESTUDIO_FUTURE_MODULES = [{ key: "sueldos", label: "Sueldos (próximamente)" }] as const;
+
+/**
+ * Valor por defecto para el instalador no interactivo: TALON_MODO=negocio|estudio.
+ * Sin variable (o con un valor desconocido) queda "negocio", que es lo de siempre.
+ */
+export function defaultCompanyMode(env: Record<string, string | undefined> = process.env): CompanyMode {
+  const value = (env.TALON_MODO ?? "").trim().toLowerCase();
+  return value === "estudio" ? "estudio" : "negocio";
+}
+
+export function modulesForMode(mode: CompanyMode, requested: readonly string[]): string[] {
+  return mode === "estudio" ? [...ESTUDIO_MODULES] : [...requested];
+}
+
 export const createCompanySchema = z.object({
+  /** Si no viene, el servidor usa TALON_MODO (o "negocio"). */
+  tipo: z.enum(COMPANY_MODES).optional(),
   name: z.string().trim().min(1, "Falta el nombre comercial").max(120),
   legalName: z.string().trim().min(1, "Falta la razón social").max(160),
   cuit: z

@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { useState } from "react";
 import { toast } from "sonner";
 import { ApiError, apiGet, apiSend, clearSessionCache } from "@/lib/api/client";
-import { ACTIONS, MODULES, actionApplies, can } from "@/lib/auth/permissions";
+import { ACTIONS, MODULES, actionApplies, can, moduleAvailable } from "@/lib/auth/permissions";
 import { useMe } from "@/components/use-me";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -132,14 +132,15 @@ function CompanyConfiguration() {
             <div className="grid gap-2 sm:grid-cols-2">
               {MODULES.filter((module) => module.toggle && module.key !== "contabilidad").map((module) => (
                 <label key={module.key} className="flex items-start gap-2 rounded-lg border p-2 text-sm">
-                  <input type="checkbox" checked={company.enabledModules.includes(module.key)} disabled={!editable} onChange={() => toggleModule(module.key)} />
+                  <input type="checkbox" checked={moduleAvailable(module.key) && company.enabledModules.includes(module.key)} disabled={!editable || !moduleAvailable(module.key)} onChange={() => toggleModule(module.key)} />
                   <span>
-                    <span className="font-semibold">{module.label}</span>
+                    <span className="font-semibold">{module.label}{!moduleAvailable(module.key) ? " · Próximamente" : ""}</span>
                     <span className="block text-muted-foreground">{module.hint}</span>
                   </span>
                 </label>
               ))}
             </div>
+            <p className="text-sm text-muted-foreground">Apagar un módulo lo oculta del menú y bloquea sus pantallas, pero no borra sus datos: al volver a prenderlo está todo como estaba.</p>
             {editable ? <Button type="submit">Guardar empresa</Button> : <p className="text-sm text-muted-foreground">Estás en modo lectura.</p>}
           </form>
           <CompanyManagement />

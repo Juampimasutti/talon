@@ -79,12 +79,13 @@ export function parseMisComprobantesXlsx(input: Buffer | Uint8Array, options: Pa
   const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true, defval: null });
   const title = String(matrix[0]?.[0] ?? "");
   const titleMatch = title.match(/Mis Comprobantes (Emitidos|Recibidos)\s*-\s*CUIT\s*(\d{11})/i);
-  if (!titleMatch) throw new Error("No pude identificar el tipo de archivo ni el CUIT del titular");
+  if (!titleMatch) throw new ImportValidationError("No pude identificar el tipo de archivo ni el CUIT del titular. Revisá que sea el XLSX de Mis Comprobantes (Emitidos o Recibidos) descargado de ARCA, sin editar la primera fila.");
   const tipo = titleMatch[1].toLowerCase() === "emitidos" ? "emitidos" : "recibidos";
   const titularCuit = titleMatch[2];
-  if (titularCuit !== options.companyCuit.replace(/\D/g, "")) throw new Error("El CUIT del archivo no coincide con la empresa activa");
+  const empresaCuit = options.companyCuit.replace(/\D/g, "");
+  if (titularCuit !== empresaCuit) throw new ImportValidationError(`El CUIT del archivo (${formatCuit(titularCuit)}) no coincide con el de la empresa (${formatCuit(empresaCuit)})`);
   const headers = (matrix[1] ?? []).map((v) => String(v ?? "").trim());
-  for (const expected of REQUIRED) if (!headers.includes(expected)) throw new Error(`No encontré la columna ${expected}`);
+  for (const expected of REQUIRED) if (!headers.includes(expected)) throw new ImportValidationError(`No encontré la columna "${expected}" en el archivo`);
   const index = new Map(headers.map((header, i) => [header, i]));
   const existing = new Set(options.existingIdentities ?? []);
   const seen = new Set<string>();
@@ -151,4 +152,16 @@ export function parseMisComprobantesXlsx(input: Buffer | Uint8Array, options: Pa
     duplicados: rows.filter((r) => r.estado === "duplicado").length,
     rechazados: rows.filter((r) => r.estado === "rechazado").length,
   } };
+}
+
+/** Error de validación del archivo: se muestra tal cual al usuario (HTTP 4xx). */
+export class ImportValidationError extends Error {
+  constructor(message: string, public status = 422) {
+    super(message);
+    this.name = "ImportValidationError";
+  }
+}
+
+export function formatCuit(digits: string): string {
+  return /^\d{11}$/.test(digits) ? `${digits.slice(0, 2)}-${digits.slice(2, 10)}-${digits.slice(10)}` : digits || "sin CUIT";
 }

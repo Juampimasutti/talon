@@ -1,3 +1,5 @@
+import { applyCompanyMode } from "./talon-modo-core";
+import { defaultCompanyMode } from "../src/lib/company-setup";
 import { simplifyDemoPerceptions } from "./seed-demo-perceptions";
 import { seedConstructora } from "./seed-constructora";
 import { seedInmobiliaria } from "./seed-inmobiliaria";
@@ -602,6 +604,12 @@ async function main() {
   await seedInmobiliaria(sql);
   await seedConstructora(sql);
   await simplifyDemoPerceptions(sql);
+  // Hook del instalador: TALON_MODO=estudio deja todas las empresas en modo estudio.
+  if (process.env.TALON_MODO?.trim()) {
+    const mode = defaultCompanyMode();
+    await applyCompanyMode(sql, mode, "todas");
+    console.log(`TALON_MODO=${mode} aplicado a todas las empresas`);
+  }
   await sql`analyze`;
   await sql.end();
   console.log("Seed listo. Entrá con laura@talon.demo / talon1234");

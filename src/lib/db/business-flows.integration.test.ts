@@ -488,6 +488,16 @@ describe.skipIf(!enabled)(
       expect((await editedRole.json()).data.permissions).not.toContain(
         "ventas.anular",
       );
+      // Modo estudio desde el alta: sólo Impuestos, el creador queda como Contador.
+      const estudio = (await request("empresas", { ...input, name: "Estudio QA", legalName: "Estudio QA SRL", cuit: buildCuit("30", "67458902"), tipo: "estudio", enabledModules: ["ventas", "stock"] })) as { id: string };
+      await request("auth/empresa", { companyId: estudio.id });
+      const estudioMe = await request("auth/me");
+      expect(estudioMe.role.key).toBe("contador");
+      expect(estudioMe.company.modules).toEqual(["impuestos"]);
+      const [estudioRow] = await sql!`select tipo from companies where id=${estudio.id}`;
+      expect(estudioRow.tipo).toBe("estudio");
+      await request("clientes", undefined, 403);
+      await request("auth/empresa", { companyId: created.id });
       execFileSync(process.execPath, ["--import", "tsx", "scripts/seed.ts"], {
         env: {
           ...process.env,

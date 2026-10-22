@@ -1,3 +1,4 @@
+import { defaultCompanyMode } from "@/lib/company-setup";
 import { createCompany } from "@/lib/domain/company";
 import { createHash } from "node:crypto";
 import { cookies } from "next/headers";
@@ -31,6 +32,7 @@ export async function companyManagement(
     return ok({
       canCreate: row.canCreate,
       canDestroy: auth?.company.roleKey === "admin",
+      defaultMode: defaultCompanyMode(),
     });
   }
   if (method === "POST" && !id) {

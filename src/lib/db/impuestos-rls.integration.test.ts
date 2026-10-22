@@ -49,8 +49,8 @@ describe.skipIf(!enabled)("impuestos RLS", () => {
     companyA = companies.find((row) => row.slug === "distribuidora-parana")!.id;
     companyB = companies.find((row) => row.slug === "costa-servicios")!.id;
     expect(companies.every((row) => !row.enabled_modules.includes("impuestos"))).toBe(true);
-    const users = await admin`select id,email from users where email in ('laura@talon.demo','mateo@talon.demo')`;
-    laura = users.find((row) => row.email === "laura@talon.demo")!.id;
+    const users = await admin`select id,email from users where email in ('hector@talon.demo','mateo@talon.demo')`;
+    laura = users.find((row) => row.email === "hector@talon.demo")!.id;
     mateo = users.find((row) => row.email === "mateo@talon.demo")!.id;
   }, 180_000);
 
@@ -170,10 +170,55 @@ describe.skipIf(!enabled)("impuestos RLS", () => {
     expect(first.rechazados).toBe(0); expect(afterOff.customers).toBe(before.customers);
     const repeated=await run(emitted,"emitidos.xlsx",false);
     expect(repeated.ok).toBe(0); expect(repeated.duplicados).toBe(first.ok+first.duplicados);
+    // El contador de la demo solo consulta proveedores; para crear contrapartes necesita proveedores.crear.
+    await admin!`insert into role_permissions(role_id,permission) select role_id,'proveedores.crear' from memberships where user_id=${laura} and company_id=${companyA} on conflict do nothing`;
     const on=await run(received,"recibidos.xlsx",true);
     const afterOn=(await admin!`select count(*)::int suppliers from suppliers where company_id=${companyA}`)[0];
     expect(on.rechazados).toBe(0); expect(afterOn.suppliers).toBeGreaterThanOrEqual(before.suppliers);
     const [linked]=await admin!`select count(*)::int count from imp_contrapartes where company_id=${companyA} and supplier_id is not null`;
     expect(linked.count).toBeGreaterThan(0);
+  });
+
+  it("permite borrar un comprobante importado y deja la fila del import sin vínculo", async () => {
+    const [row]=await admin!`select r.id,r.comprobante_id from imp_import_rows r join imp_comprobantes c on c.id=r.comprobante_id
+      left join imp_periodos p on p.company_id=c.company_id and p.periodo=c.periodo
+      where r.company_id=${companyA} and coalesce(p.estado,'abierto')<>'cerrado' limit 1`;
+    expect(row).toBeTruthy();
+    await admin!`delete from imp_comprobante_alicuotas where comprobante_id=${row.comprobante_id}`;
+    await admin!`delete from imp_comprobantes where id=${row.comprobante_id}`;
+    const [after]=await admin!`select company_id,comprobante_id from imp_import_rows where id=${row.id}`;
+    expect(after.company_id).toBe(companyA);
+    expect(after.comprobante_id).toBeNull();
+  });
+
+  it("reserva los permisos de Impuestos al puesto contador", async () => {
+    const [adminRole]=await admin!`select id from roles where company_id=${companyA} and key='admin'`;
+    const [count]=await admin!`select count(*)::int n from role_permissions where role_id=${adminRole.id} and permission like 'impuestos.%'`;
+    expect(count.n).toBe(0);
+    await expect(admin!`insert into role_permissions(role_id,permission) values(${adminRole.id},'impuestos.ver')`).rejects.toThrow("exclusivos del puesto Contador");
+    const [contador]=await admin!`select count(*)::int n from role_permissions rp join roles r on r.id=rp.role_id where r.company_id=${companyA} and r.key='contador' and rp.permission like 'impuestos.%'`;
+    expect(contador.n).toBe(6);
+  });
+
+  it("TALON_MODO: aplica modo estudio idempotente, sin borrar datos, y vuelve a negocio", async () => {
+    const { applyCompanyMode } = await import("../../../scripts/talon-modo-core");
+    const [before]=await admin!`select enabled_modules,business_sector,(select count(*)::int from customers where company_id=${companyB}) customers from companies where id=${companyB}`;
+    const first=await applyCompanyMode(admin!,"estudio",companyB);
+    expect(first[0]).toMatchObject({changed:true,enabledModules:["impuestos"]});
+    const second=await applyCompanyMode(admin!,"estudio",companyB);
+    expect(second[0].changed).toBe(false);
+    const [row]=await admin!`select tipo,enabled_modules,(select count(*)::int from customers where company_id=${companyB}) customers from companies where id=${companyB}`;
+    expect(row.tipo).toBe("estudio");
+    expect(row.enabled_modules).toEqual(["impuestos"]);
+    expect(row.customers).toBe(before.customers);
+    const [admins]=await admin!`select count(*)::int n from memberships m join roles r on r.id=m.role_id where m.company_id=${companyB} and r.key='admin'`;
+    expect(admins.n).toBe(0);
+    const [audits]=await admin!`select count(*)::int n from audit_log where company_id=${companyB} and action='configuracion.modo'`;
+    expect(audits.n).toBe(1);
+    const back=await applyCompanyMode(admin!,"negocio",companyB);
+    expect(back[0].changed).toBe(true);
+    expect(back[0].enabledModules).not.toContain("impuestos");
+    expect(back[0].enabledModules).toContain("ventas");
+    await expect(applyCompanyMode(admin!,"estudio","no-existe")).rejects.toThrow("No encontré");
   });
 });

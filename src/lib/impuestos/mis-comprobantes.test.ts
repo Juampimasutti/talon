@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as XLSX from "xlsx";
 import { describe, expect, it } from "vitest";
-import { parseMisComprobantesXlsx } from "./mis-comprobantes";
+import { ImportValidationError, parseMisComprobantesXlsx } from "./mis-comprobantes";
 
 const fixture = (name: string) => readFileSync(join(__dirname, "__fixtures__", name));
 const cuit = "20111111112";
@@ -23,6 +23,14 @@ describe("Mis Comprobantes", () => {
   it("rechaza el archivo entero si el CUIT no coincide", () => {
     expect(() => parseMisComprobantesXlsx(fixture("mis-comprobantes-emitidos-ejemplo.xlsx"), { companyCuit: "30710000014" }))
       .toThrow("no coincide");
+  });
+
+  it("los errores de validación del archivo son ImportValidationError 422 con ambos CUIT", () => {
+    let error: unknown;
+    try { parseMisComprobantesXlsx(fixture("mis-comprobantes-emitidos-ejemplo.xlsx"), { companyCuit: "30-71000001-4" }); } catch (e) { error = e; }
+    expect(error).toBeInstanceOf(ImportValidationError);
+    expect((error as ImportValidationError).status).toBe(422);
+    expect((error as Error).message).toMatch(/^El CUIT del archivo \(\d{2}-\d{8}-\d\) no coincide con el de la empresa \(30-71000001-4\)$/);
   });
 
   it("al reimportar marca todas las filas como duplicadas", () => {

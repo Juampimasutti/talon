@@ -19,6 +19,7 @@ export const companies = pgTable("companies", {
   name: text("name").notNull(),
   legalName: text("legal_name").notNull(),
   businessSector: text("business_sector").notNull().default("comercio"),
+  tipo: text("tipo").notNull().default("negocio"),
   activityStartedOn: date("activity_started_on", { mode: "string" }),
   cuit: text("cuit").notNull(),
   taxCondition: text("tax_condition").notNull(),

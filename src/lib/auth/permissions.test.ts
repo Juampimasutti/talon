@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { MODULES, ROLE_TEMPLATES, allPermissions, can, moduleEnabled, permissionDelta, visibleModules } from "./permissions";
+import { MODULES, ROLE_TEMPLATES, allPermissions, can, moduleAvailable, moduleEnabled, permissionAllowedForRole, permissionDelta, visibleModules } from "./permissions";
 
 describe("permisos", () => {
+  it("registra Sueldos como próximo sin permisos ni activación", () => {
+    expect(moduleAvailable("sueldos")).toBe(false);
+    expect(moduleEnabled(["sueldos"], "sueldos")).toBe(false);
+    expect(allPermissions().some((permission) => permission.startsWith("sueldos."))).toBe(false);
+  });
   it("el vendedor no ve compras ni configuración", () => {
     const permissions = ROLE_TEMPLATES.vendedor.permissions;
     expect(can(permissions, "compras", "ver")).toBe(false);
@@ -20,8 +25,8 @@ describe("permisos", () => {
     expect(menu).toContain("ventas");
   });
 
-  it("el contador solo mira y exporta", () => {
-    const permissions = ROLE_TEMPLATES.contador.permissions;
+  it("el contador solo mira y exporta, salvo plan de cuentas e Impuestos", () => {
+    const permissions = ROLE_TEMPLATES.contador.permissions.filter((item) => !item.startsWith("impuestos."));
     expect(permissions.filter((item) => item.endsWith(".crear") || item.endsWith(".editar"))).toEqual(["contabilidad.crear", "contabilidad.editar"]);
     expect(permissions.some((item) => item.endsWith(".anular") || item.endsWith(".importar"))).toBe(false);
     expect(can(permissions, "ventas", "ver")).toBe(true);
@@ -29,12 +34,12 @@ describe("permisos", () => {
     expect(can(permissions, "auditoria", "ver")).toBe(true);
   });
 
-  it("cada puesto usa permisos que existen y el admin los tiene todos", () => {
+  it("cada puesto usa permisos que existen y el admin los tiene todos menos Impuestos", () => {
     const universe = new Set(allPermissions());
     for (const role of Object.values(ROLE_TEMPLATES)) {
       for (const permission of role.permissions) expect(universe.has(permission)).toBe(true);
     }
-    expect(ROLE_TEMPLATES.admin.permissions).toHaveLength(universe.size);
+    expect(ROLE_TEMPLATES.admin.permissions).toHaveLength(universe.size - 6);
   });
 
   it("el playero carga su playa y el encargado no entra a configuración", () => {
@@ -76,12 +81,12 @@ describe("permisos", () => {
     expect(moduleEnabled(["ventas"], "compras")).toBe(false);
     expect(moduleEnabled(["ventas"], "impuestos")).toBe(false);
     expect(visibleModules(["ventas"], ROLE_TEMPLATES.admin.permissions).map((item) => item.key)).not.toContain("impuestos");
-    expect(visibleModules(["ventas", "impuestos"], ROLE_TEMPLATES.admin.permissions).map((item) => item.key)).toContain("impuestos");
+    expect(visibleModules(["ventas", "impuestos"], ROLE_TEMPLATES.contador.permissions).map((item) => item.key)).toContain("impuestos");
     expect(moduleEnabled(["ventas"], "dashboard")).toBe(true);
     expect(moduleEnabled([], "configuracion")).toBe(true);
   });
 
-  it("crea los seis permisos de impuestos y limita al contador a lectura", () => {
+  it("crea los seis permisos de impuestos y los reserva al contador", () => {
     expect(allPermissions().filter((permission) => permission.startsWith("impuestos."))).toEqual([
       "impuestos.ver",
       "impuestos.crear",
@@ -92,7 +97,17 @@ describe("permisos", () => {
     ]);
     expect(can(ROLE_TEMPLATES.contador.permissions, "impuestos", "ver")).toBe(true);
     expect(can(ROLE_TEMPLATES.contador.permissions, "impuestos", "exportar")).toBe(true);
-    expect(can(ROLE_TEMPLATES.contador.permissions, "impuestos", "crear")).toBe(false);
+    expect(can(ROLE_TEMPLATES.contador.permissions, "impuestos", "crear")).toBe(true);
+    expect(can(ROLE_TEMPLATES.contador.permissions, "impuestos", "anular")).toBe(true);
+    for (const [key, role] of Object.entries(ROLE_TEMPLATES)) {
+      if (key === "contador") continue;
+      expect(role.permissions.filter((permission) => permission.startsWith("impuestos.")), key).toEqual([]);
+    }
+    expect(visibleModules(["impuestos"], ROLE_TEMPLATES.admin.permissions).map((item) => item.key)).not.toContain("impuestos");
+    expect(visibleModules(["impuestos"], ROLE_TEMPLATES.contador.permissions).map((item) => item.key)).toContain("impuestos");
+    expect(permissionAllowedForRole("admin", "impuestos.ver")).toBe(false);
+    expect(permissionAllowedForRole("contador", "impuestos.ver")).toBe(true);
+    expect(permissionAllowedForRole("admin", "ventas.ver")).toBe(true);
   });
 
   it("caja, depósito y compras quedan en su carril", () => {

@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
-import { allPermissions, MODULES, ROLE_TEMPLATES } from "../auth/permissions";
-import { BASE_DOCUMENT_TYPES, type CreateCompanyInput } from "../company-setup";
+import { MODULES, ROLE_TEMPLATES, moduleAvailable } from "../auth/permissions";
+import { BASE_DOCUMENT_TYPES, defaultCompanyMode, modulesForMode, type CreateCompanyInput } from "../company-setup";
 import { formatCuit } from "../fiscal/cuit";
 import { HttpError } from "../http";
 import {
@@ -18,10 +18,12 @@ import type { Tx } from "../db/tenant";
 export async function createCompany(
   tx: Tx,
   token: string,
-  input: CreateCompanyInput,
+  rawInput: CreateCompanyInput,
 ) {
+  const tipo = rawInput.tipo ?? defaultCompanyMode();
+  const input = { ...rawInput, tipo, enabledModules: modulesForMode(tipo, rawInput.enabledModules) };
   const allowed = new Set<string>(
-    MODULES.filter((item) => item.toggle).map((item) => item.key),
+    MODULES.filter((item) => item.toggle && moduleAvailable(item.key)).map((item) => item.key),
   );
   if (
     input.enabledModules.some(
@@ -33,7 +35,7 @@ export async function createCompany(
     ...input,
     cuit: formatCuit(input.cuit),
     pointOfSale: input.pointsOfSale[0],
-    adminPermissions: allPermissions(),
+    adminPermissions: ROLE_TEMPLATES.admin.permissions,
   };
   const [row] = await tx.execute<{ id: string }>(
     sql`select company_bootstrap(${token},${JSON.stringify(payload)}::jsonb) as id`,
@@ -138,6 +140,20 @@ export async function createCompany(
       { companyId: id, code: "4.1", name: "Ventas", kind: "ingreso" },
       { companyId: id, code: "5.1", name: "Compras y gastos", kind: "egreso" },
     ]);
+  if (tipo === "estudio") {
+    // Estudio contable: Impuestos es exclusivo del puesto Contador, así que quien
+    // crea el estudio queda como Contador (con Configuración para manejar módulos
+    // y usuarios). El puesto Administración queda creado pero sin miembros.
+    const contador = roleRows.find((role) => role.key === "contador");
+    if (!contador) throw new HttpError(500, "Falta el puesto Contador");
+    await tx.execute(sql`update companies set tipo='estudio' where id=${id}`);
+    await tx.execute(
+      sql`insert into role_permissions(role_id,permission) values (${contador.id},'configuracion.ver'),(${contador.id},'configuracion.editar') on conflict do nothing`,
+    );
+    await tx.execute(
+      sql`update memberships set role_id=${contador.id} where company_id=${id} and user_id=${actor.id}::uuid`,
+    );
+  }
   await writeAudit(tx, {
     companyId: id,
     userId: actor.id,
@@ -145,7 +161,7 @@ export async function createCompany(
     entity: "empresa",
     entityId: id,
     summary: `Empresa creada: ${input.name}`,
-    metadata: { pointsOfSale: input.pointsOfSale, documentTypes: types.length },
+    metadata: { pointsOfSale: input.pointsOfSale, documentTypes: types.length, tipo },
   });
   return { id };
 }

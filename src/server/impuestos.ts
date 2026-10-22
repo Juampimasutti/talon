@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { z } from "zod";
 import { can } from "@/lib/auth/permissions";
 import { requirePermission } from "@/lib/auth/session";
+import { ImportValidationError } from "@/lib/impuestos/mis-comprobantes";
 import { withTenant } from "@/lib/db/tenant";
 import { HttpError, ok } from "@/lib/http";
 import { readBody } from "@/lib/validation";
@@ -44,10 +45,15 @@ export async function impuestos(method:string,path:string[],req:Request){
   if(method==="POST"&&resource==="importar"){
     const auth=await requirePermission("impuestos","importar"); const body=await readBody(req,importSchema);
     const file=Buffer.from(body.base64,"base64"); if(file.length>15_000_000) throw new HttpError(413,"El archivo supera 15 MB");
-    return withTenant(auth.company.companyId,auth.user.id,async tx=>ok(await importarMisComprobantes(tx,{
-      companyId:auth.company.companyId,userId:auth.user.id,companyCuit:auth.company.cuit,
-      canCreateCustomer:can(auth.permissions,"clientes","crear"),canCreateSupplier:can(auth.permissions,"proveedores","crear"),
-    },file,body.fileName,body.periodo,body.crearEnTalon)),"exclusive");
+    try {
+      return await withTenant(auth.company.companyId,auth.user.id,async tx=>ok(await importarMisComprobantes(tx,{
+        companyId:auth.company.companyId,userId:auth.user.id,companyCuit:auth.company.cuit,
+        canCreateCustomer:can(auth.permissions,"clientes","crear"),canCreateSupplier:can(auth.permissions,"proveedores","crear"),
+      },file,body.fileName,body.periodo,body.crearEnTalon)),"exclusive");
+    } catch(error) {
+      if(error instanceof ImportValidationError) throw new HttpError(error.status,error.message);
+      throw error;
+    }
   }
   if(method==="GET"&&resource==="exportar"){
     const auth=await requirePermission("impuestos","exportar"); const periodo=period.parse(url.searchParams.get("periodo"));
