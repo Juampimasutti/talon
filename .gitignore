@@ -45,6 +45,7 @@ next-env.d.ts
 
 # respaldos locales con datos privados
 /backups/
+/logs/
 
 # Estado privado del instalador local
 /.talon-windows.json

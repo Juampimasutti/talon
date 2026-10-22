@@ -2,9 +2,14 @@
   "name": "talon",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11 <12"
+  },
   "scripts": {
     "dev": "node scripts/serve.mjs dev --hostname 0.0.0.0 --port 4317",
     "build": "next build",
+    "build:standalone": "next build && node scripts/package-standalone.mjs",
     "start": "node scripts/serve.mjs start --hostname 0.0.0.0 --port 4317",
     "lint": "eslint",
     "test": "vitest run",

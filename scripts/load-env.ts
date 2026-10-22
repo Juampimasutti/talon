@@ -1,7 +1,10 @@
 import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 export function loadEnv(): void {
-  for (const file of [".env", ".env.local"]) {
+  const configured = process.env.TALON_ENV_FILE?.trim();
+  const files = configured ? [resolve(configured)] : [".env", ".env.local"];
+  for (const file of files) {
     if (!existsSync(file)) continue;
     for (const line of readFileSync(file, "utf8").split("\n")) {
       const trimmed = line.trim();

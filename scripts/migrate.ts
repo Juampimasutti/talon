@@ -1,4 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import postgres from "postgres";
 import { loadEnv } from "./load-env";
 
@@ -11,6 +13,7 @@ if (!url) {
 }
 
 const sql = postgres(url, { max: 1, onnotice: () => {} });
+const migrationDirectory = join(dirname(fileURLToPath(import.meta.url)), "..", "drizzle");
 
 async function main() {
 const roles = await sql`select 1 from pg_roles where rolname = 'talon_app'`;
@@ -30,7 +33,7 @@ await sql.unsafe(`
   )
 `);
 
-const files = readdirSync("drizzle")
+const files = readdirSync(migrationDirectory)
   .filter((file) => file.endsWith(".sql"))
   .sort();
 
@@ -40,7 +43,7 @@ for (const file of files) {
     console.log(`ya estaba ${file}`);
     continue;
   }
-  const body = readFileSync(`drizzle/${file}`, "utf8");
+  const body = readFileSync(join(migrationDirectory, file), "utf8");
   console.log(`aplicando ${file}`);
   await sql.begin(async (tx) => {
     await tx.unsafe(body);
