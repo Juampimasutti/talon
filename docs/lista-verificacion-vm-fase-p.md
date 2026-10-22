@@ -8,6 +8,9 @@ exactos y los JSON de la prueba de concurrencia cuando algo falle.
 - [ ] Windows 10 u 11 x64 limpio; versión anotada: __________
 - [ ] Node portable 24.x arranca: `C:\Talon\node\node.exe --version` → __________
 - [ ] El standalone se compiló en Windows con `npm run build:standalone`.
+- [ ] `npm config get ignore-scripts` devuelve: __________
+- [ ] Anotar si npm bloqueó `postinstall` de `esbuild` o `unrs-resolver`: __________
+- [ ] Si el build falló, `npm rebuild esbuild unrs-resolver --foreground-scripts` lo corrigió: Sí / No / No fue necesario.
 - [ ] Anotar si el build exigió Modo para desarrolladores o elevación: __________
 - [ ] El paquete sigue arrancando después de copiarlo a `C:\Talon\app`.
 - [ ] `C:\Talon\app` contiene `server.js`, `public`, `.next\static`, `drizzle` y los scripts compilados.
@@ -36,7 +39,9 @@ exactos y los JSON de la prueba de concurrencia cuando algo falle.
 
 ## Concurrencia
 
-- [ ] Localhost: `prueba-doble-cobro.mjs ... 5 todas` completó las tres variantes.
+- [ ] Confirmar que `C:\Talon\app\node_modules\postgres` no es necesario para ejecutar la herramienta.
+- [ ] Localhost, con `DATABASE_URL_ADMIN`: `prueba-doble-cobro.js ... 5 todas` completó y mostró conteo DB.
+- [ ] Localhost, sin `DATABASE_URL_ADMIN` ni `DATABASE_URL`: la herramienta completó y mostró `DB=sin conteo`.
 - [ ] Resultado `anticipo`: únicos ___ / duplicados ___ / errores ___
 - [ ] Resultado `recibo`: únicos ___ / duplicados ___ / errores ___
 - [ ] Resultado `deuda-exacta`: únicos ___ / duplicados ___ / errores ___

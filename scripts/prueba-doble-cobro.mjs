@@ -17,9 +17,9 @@ import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import http from "node:http";
 import https from "node:https";
-import { createRequire } from "node:module";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import postgres from "postgres";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const baseUrl = (process.argv[2] || "").replace(/\/$/, "");
@@ -215,8 +215,6 @@ async function countInDatabase(session, partyId, marker) {
   if (!["127.0.0.1", "localhost", "::1", "[::1]"].includes(parsed.hostname)) {
     throw new Error("El conteo SQL de esta prueba solo admite PostgreSQL en localhost");
   }
-  const require = createRequire(import.meta.url);
-  const postgres = require("postgres");
   const sql = postgres(databaseUrl, { max: 1, onnotice: () => {} });
   try {
     const [row] = await sql`

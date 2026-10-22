@@ -17,6 +17,26 @@ npm ci
 npm run build:standalone
 ```
 
+Si npm informa que bloqueó los `postinstall` de `esbuild` o
+`unrs-resolver`, comprobá primero si el build termina: ambos paquetes también
+publican binarios opcionales por plataforma. En Linux se verificó con npm
+11.9.0 que incluso `npm ci --ignore-scripts` permite completar
+`npm run build:standalone`; el resultado en Windows todavía debe medirse en la
+VM. Si el build falla, habilitá los scripts para este proyecto, reconstruí esos
+dos paquetes y repetí la compilación:
+
+```powershell
+npm config get ignore-scripts
+npm config set ignore-scripts false --location=project
+npm rebuild esbuild unrs-resolver --foreground-scripts
+node -e "require('esbuild').transformSync('let prueba = 1')"
+npm run build:standalone
+```
+
+No continúes si el último comando falla. Guardá la salida completa y anotá si
+fue necesario habilitar los scripts. La instalación final en el local no corre
+`npm install`: recibe el standalone ya compilado.
+
 Si Next informa que no puede crear enlaces de directorio, activá el Modo para
 desarrolladores de Windows o repetí el build con una terminal elevada y anotá
 cuál alternativa fue necesaria. Los junctions de Windows pueden guardar rutas
@@ -113,12 +133,13 @@ $env:TALON_EMAIL = "USUARIO-DE-PRUEBA"
 $env:TALON_PASSWORD = "CLAVE-DE-PRUEBA"
 $env:DATABASE_URL_ADMIN = "postgresql://postgres:$adminPassword@127.0.0.1:5433/talon"
 $env:TALON_PRUEBA_LOG_DIR = "C:\Talon\logs"
-& C:\Talon\node\node.exe C:\Talon\app\scripts\prueba-doble-cobro.mjs http://127.0.0.1:4318 5 todas
+& C:\Talon\node\node.exe C:\Talon\app\scripts\prueba-doble-cobro.js http://127.0.0.1:4318 5 todas
 ```
 
-Repetí desde otra PC contra `http://IP-DE-LA-PC:4318` sin definir
-`DATABASE_URL_ADMIN`; el conteo principal se hace por API. Conservá los JSON de
-`C:\Talon\logs`.
+Repetí desde otra PC contra `http://IP-DE-LA-PC:4318` después de quitar
+`DATABASE_URL_ADMIN` y `DATABASE_URL` de esa terminal; el conteo principal se
+hace por API y el script compilado funciona sin acceso directo a PostgreSQL.
+Conservá los JSON de `C:\Talon\logs`.
 
 ## 5. Apagado manual
 

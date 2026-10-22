@@ -29,6 +29,7 @@ await build({
     migrate: "scripts/migrate.ts",
     "empresa-autorizar": "scripts/company-operator.ts",
     "backup-worker": "scripts/backup-worker.mjs",
+    "prueba-doble-cobro": "scripts/prueba-doble-cobro.mjs",
   },
   outdir: runtimeScripts,
   bundle: true,
@@ -43,7 +44,6 @@ await build({
 await Promise.all([
   cp(join(root, "scripts", "load-env-runtime.mjs"), join(runtimeScripts, "load-env-runtime.mjs")),
   cp(join(root, "scripts", "run-standalone.mjs"), join(runtimeScripts, "run-standalone.mjs")),
-  cp(join(root, "scripts", "prueba-doble-cobro.mjs"), join(runtimeScripts, "prueba-doble-cobro.mjs")),
 ]);
 await writeFile(join(runtimeScripts, "package.json"), '{"type":"module"}\n');
 
