@@ -46,7 +46,9 @@ export function EmpresaDetailScreen({ id, seccion }: { id: string; seccion?: Sec
             [`/impuestos/empresas/${id}/liquidacion`, "Liquidación de IVA"],
           ]} /> : null}
           {seccion === "compras" ? <InternalLinks links={[[`/impuestos/empresas/${id}/libro-iva?libro=compras`, "Libro IVA Compras"]]} /> : null}
-          <div className="grid gap-2 text-sm sm:grid-cols-4"><Stat label="Compras" value={counts.compras} /><Stat label="Ventas" value={counts.ventas} /><Stat label="Períodos" value={counts.periodos} /><Stat label="Liquidaciones" value={counts.liquidaciones} /></div>
+          {seccion === "ventas" ? <div className="grid gap-2 text-sm sm:grid-cols-2"><Stat label="Comprobantes de ventas" value={counts.ventas} /><Stat label="Liquidaciones" value={counts.liquidaciones} /></div> :
+            seccion === "compras" ? <div className="grid gap-2 text-sm sm:grid-cols-2"><Stat label="Comprobantes de compras" value={counts.compras} /></div> :
+              <div className="grid gap-2 text-sm sm:grid-cols-4"><Stat label="Compras" value={counts.compras} /><Stat label="Ventas" value={counts.ventas} /><Stat label="Períodos" value={counts.periodos} /><Stat label="Liquidaciones" value={counts.liquidaciones} /></div>}
         </>}
       </section>}
   </main>;
