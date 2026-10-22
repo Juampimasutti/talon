@@ -33,6 +33,14 @@ const empresaSchema=z.object({
   condicionIva:z.string().trim().min(1).max(40),
   rubro:z.string().trim().max(120).nullish(),
 });
+const empresaConfigSchema=z.object({
+  toleranciaCents:z.number().int().min(0).max(10000),
+  crearEnTalonDefault:z.boolean(),
+  puntosVenta:z.array(z.number().int().min(1).max(99999)).max(100).refine(v=>new Set(v).size===v.length,"Hay puntos de venta repetidos"),
+  actividades:z.array(z.object({codigo:z.string().trim().min(1).max(30),descripcion:z.string().trim().min(1).max(160),principal:z.boolean()})).max(100)
+    .refine(v=>new Set(v.map(a=>a.codigo)).size===v.length,"Hay códigos de actividad repetidos")
+    .refine(v=>v.filter(a=>a.principal).length<=1,"Sólo puede haber una actividad principal"),
+});
 
 type EmpresaFiscal={id:string;nombre:string;razonSocial:string;cuit:string;condicionIva:string;rubro:string|null;activa:boolean};
 
@@ -80,8 +88,26 @@ export async function impuestos(method:string,path:string[],req:Request){
           (select count(*)::int from imp_comprobantes where libro='ventas') ventas,
           (select count(*)::int from imp_periodos) periodos,
           (select count(*)::int from imp_liquidaciones) liquidaciones`);
-        return ok({empresa,counts,seccion:detail??null});
+        const [config]=await tx.execute<{toleranciaCents:number;crearEnTalonDefault:boolean}>(sql`select tolerancia_cents::int "toleranciaCents",crear_en_talon_default "crearEnTalonDefault" from imp_config limit 1`);
+        const puntosVenta=await tx.execute<{numero:number;sistema:string}>(sql`select numero,sistema from imp_puntos_venta where activo order by numero`);
+        const actividades=await tx.execute<{codigo:string;descripcion:string;principal:boolean}>(sql`select codigo,descripcion,principal from imp_actividades order by principal desc,codigo`);
+        return ok({empresa,counts,seccion:detail??null,config:config??{toleranciaCents:5,crearEnTalonDefault:false},puntosVenta,actividades});
       });
+    }
+    if(action&&z.string().uuid().safeParse(action).success&&detail==="configuracion"&&method==="PATCH"){
+      const body=await readBody(req,empresaConfigSchema);
+      url.searchParams.set("empresa",action);
+      return withImpuestos(auth,url,async(tx,empresa)=>{
+        await tx.execute(sql`insert into imp_config(company_id,empresa_cliente_id,tolerancia_cents,crear_en_talon_default)
+          values(${auth.company.companyId},${empresa.id}::uuid,${body.toleranciaCents},${body.crearEnTalonDefault})
+          on conflict(company_id,empresa_cliente_id) do update set tolerancia_cents=excluded.tolerancia_cents,crear_en_talon_default=excluded.crear_en_talon_default,updated_at=now()`);
+        await tx.execute(sql`delete from imp_puntos_venta`);
+        for(const numero of body.puntosVenta) await tx.execute(sql`insert into imp_puntos_venta(company_id,empresa_cliente_id,numero,sistema) values(${auth.company.companyId},${empresa.id}::uuid,${numero},'manual')`);
+        await tx.execute(sql`delete from imp_actividades`);
+        for(const actividad of body.actividades) await tx.execute(sql`insert into imp_actividades(company_id,empresa_cliente_id,codigo,descripcion,principal) values(${auth.company.companyId},${empresa.id}::uuid,${actividad.codigo},${actividad.descripcion},${actividad.principal})`);
+        await writeAudit(tx,{companyId:auth.company.companyId,userId:auth.user.id,action:"impuestos.configuracion.editar",entity:"imp_empresa",entityId:empresa.id,summary:`Configuración fiscal actualizada: ${empresa.nombre}`,metadata:{toleranciaCents:body.toleranciaCents,puntosVenta:body.puntosVenta,actividades:body.actividades.map(a=>a.codigo)}});
+        return ok({saved:true});
+      },"exclusive");
     }
     if(action&&z.string().uuid().safeParse(action).success&&method==="PATCH"){
       const body=await readBody(req,empresaSchema);

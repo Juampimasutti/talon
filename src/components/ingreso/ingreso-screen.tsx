@@ -50,7 +50,7 @@ export function IngresoScreen() {
       if ("backupOnly" in me) { clearSessionCache(); router.push("/respaldos"); return; }
       primeSession(me);
       queryClient.setQueryData(["me"], me);
-      window.location.assign("/tablero");
+      router.push(me.company.tipo === "estudio" ? (me.permissions.includes("impuestos.ver") ? "/impuestos" : "/configuracion") : "/tablero");
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : "No pude entrar");
     } finally {

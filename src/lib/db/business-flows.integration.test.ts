@@ -490,7 +490,7 @@ describe.skipIf(!enabled)(
         "ventas.anular",
       );
       // Modo estudio desde el alta: sólo Impuestos, el creador queda como Contador.
-      const estudio = (await request("empresas", { ...input, name: "Estudio QA", legalName: "Estudio QA SRL", cuit: buildCuit("30", "67458902"), tipo: "estudio", enabledModules: ["ventas", "stock"] })) as { id: string };
+      const estudio = (await request("empresas", { ...input, name: "Estudio QA", legalName: "Estudio QA SRL", cuit: buildCuit("30", "67458902"), tipo: "estudio", businessSector: undefined, enabledModules: ["ventas", "stock"] })) as { id: string };
       await request("auth/empresa", { companyId: estudio.id });
       const estudioMe = await request("auth/me");
       expect(estudioMe.role.key).toBe("contador");
@@ -533,6 +533,21 @@ describe.skipIf(!enabled)(
         cuit: buildCuit("30", "67458903"), condicionIva: "ri", rubro: "servicios",
       });
       expect((await request(`impuestos/empresas/${clienteFiscal.id}`)).counts).toEqual({compras:0,ventas:0,periodos:0,liquidaciones:0});
+      await request(`impuestos/empresas/${clienteFiscal.id}/configuracion`, {
+        toleranciaCents: 6,
+        crearEnTalonDefault: true,
+        puntosVenta: [2, 4],
+        actividades: [{codigo:"620100",descripcion:"Servicios de informática",principal:true}],
+      }, 200, "PATCH");
+      const configFiscal = await request(`impuestos/empresas/${clienteFiscal.id}`);
+      expect(configFiscal.config).toMatchObject({toleranciaCents:6,crearEnTalonDefault:true});
+      expect(configFiscal.puntosVenta.map((p:{numero:number})=>p.numero)).toEqual([2,4]);
+      expect(configFiscal.actividades).toEqual([{codigo:"620100",descripcion:"Servicios de informática",principal:true}]);
+      const configPrincipal = await request(`impuestos/empresas/${empresaFiscal.id}`);
+      expect(configPrincipal.config).toMatchObject({toleranciaCents:5,crearEnTalonDefault:false});
+      expect(configPrincipal.puntosVenta).toEqual([]);
+      const [auditConfig] = await sql!`select action from audit_log where company_id=${estudio.id} and entity_id=${clienteFiscal.id} order by created_at desc limit 1`;
+      expect(auditConfig.action).toBe("impuestos.configuracion.editar");
       await request(`impuestos/empresas/${clienteFiscal.id}`, {...clienteFiscal,nombre:"Cliente fiscal editado"},200,"PATCH");
       const [auditEmpresa] = await sql!`select action from audit_log where company_id=${estudio.id} and entity_id=${clienteFiscal.id} order by created_at desc limit 1`;
       expect(auditEmpresa.action).toBe("impuestos.empresa.editar");

@@ -1,5 +1,5 @@
 export type EmpresaImpositiva = { id:string; nombre:string; razonSocial:string; cuit:string; condicionIva:string; rubro:string|null; activa:boolean };
-export type EmpresaImpositivaDetalle = { empresa:EmpresaImpositiva; counts:{compras:number;ventas:number;periodos:number;liquidaciones:number}; seccion:string|null };
+export type EmpresaImpositivaDetalle = { empresa:EmpresaImpositiva; counts:{compras:number;ventas:number;periodos:number;liquidaciones:number}; seccion:string|null; config:{toleranciaCents:number;crearEnTalonDefault:boolean}; puntosVenta:{numero:number;sistema:string}[]; actividades:{codigo:string;descripcion:string;principal:boolean}[] };
 export const SECCIONES_IMPUESTOS = [
   {key:"compras",label:"Compras",description:"Comprobantes recibidos e importaciones."},
   {key:"ventas",label:"Ventas",description:"Comprobantes emitidos e importaciones."},

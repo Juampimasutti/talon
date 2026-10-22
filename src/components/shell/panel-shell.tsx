@@ -3,6 +3,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BookOpen,
+  Building2,
   Calculator,
   Landmark,
   ClipboardList,
@@ -22,7 +23,6 @@ import {
   Users,
   Wallet,
   Warehouse,
-  Plus,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -33,6 +33,7 @@ import { visibleModules } from "@/lib/auth/permissions";
 import { taxConditionLabel } from "@/lib/fiscal/labels";
 import { formatCuit } from "@/lib/fiscal/cuit";
 import type { EmpresaImpositiva } from "@/components/impuestos/empresa-types";
+import { empresaIdFromPath, useRememberedEmpresa } from "@/lib/impuestos/seleccion";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ScreenFallback } from "@/components/screen-fallback";
@@ -95,6 +96,18 @@ export function PanelShell({ children }: { children: React.ReactNode }) {
   const me = useMe();
   const cached = useCachedMe();
   const session = me.data ?? cached;
+  const isStudy = session?.company.tipo === "estudio";
+  const hasTaxes = Boolean(session && visibleModules(session.company.modules, session.permissions).some((item) => item.key === "impuestos"));
+  const companies = useQuery({
+    queryKey: ["impuestos-empresas"],
+    queryFn: () => apiSend<{ items: EmpresaImpositiva[] }>("/api/impuestos/empresas", "GET"),
+    enabled: Boolean(isStudy && hasTaxes),
+  });
+  const rememberedTaxCompany = useRememberedEmpresa();
+
+  useEffect(() => {
+    if (isStudy && pathname === "/tablero") router.replace(hasTaxes ? "/impuestos" : "/configuracion");
+  }, [hasTaxes, isStudy, pathname, router]);
 
   useEffect(() => {
     if (typeof navigator !== "undefined" && navigator.onLine === false) return;
@@ -120,10 +133,12 @@ export function PanelShell({ children }: { children: React.ReactNode }) {
 
   if (!session) return <ScreenFallback label="Abriendo la empresa" />;
   if (access === "deny" || access === "module-off") {
-    return <main className="mx-auto max-w-lg p-6"><h1 className="text-lg font-semibold">{access === "module-off" ? "Módulo no activo" : "Sin permiso"}</h1><p className="mt-2 text-sm text-muted-foreground">{access === "module-off" ? "Esta sección no está habilitada en la empresa seleccionada." : "Tu puesto no tiene acceso a esta sección. Consultá con la administración."}</p><Link className="mt-4 inline-block text-sm text-primary underline" href="/tablero">Volver al tablero</Link></main>;
+    return <main className="mx-auto max-w-lg p-6"><h1 className="text-lg font-semibold">{access === "module-off" ? "Módulo no activo" : "Sin permiso"}</h1><p className="mt-2 text-sm text-muted-foreground">{access === "module-off" ? "Esta sección no está habilitada en la empresa seleccionada." : "Tu puesto no tiene acceso a esta sección. Consultá con la administración."}</p><Link className="mt-4 inline-block text-sm text-primary underline" href={isStudy ? "/configuracion" : "/tablero"}>Volver</Link></main>;
   }
   const data = session;
-  const items = visibleModules(data.company.modules, data.permissions);
+  const items = visibleModules(data.company.modules, data.permissions).filter((item) => !(isStudy && item.key === "dashboard"));
+  const selectedTaxCompany = empresaIdFromPath(pathname) ?? rememberedTaxCompany;
+  const selectedCompany = companies.data?.items.find((item) => item.id === selectedTaxCompany) ?? null;
 
   async function leave() {
     await apiSend("/api/auth/logout", "POST");
@@ -147,7 +162,7 @@ export function PanelShell({ children }: { children: React.ReactNode }) {
         const href = HREF[item.key] ?? "/tablero";
         const Icon = ICONS[item.key] ?? FileText;
         const active = pathname === href || pathname.startsWith(`${href}/`);
-        if(item.key==="impuestos") return <ImpuestosTree key={item.key} pathname={pathname} close={()=>setOpen(false)}/>;
+        if (item.key === "impuestos" && isStudy) return <StudyTaxNav key={item.key} pathname={pathname} close={() => setOpen(false)} selected={selectedCompany} />;
         return (
           <Link
             key={item.key}
@@ -185,11 +200,11 @@ export function PanelShell({ children }: { children: React.ReactNode }) {
     <div className="talon-app min-h-screen">
       <header className="talon-topbar">
         <div className="flex items-center gap-4">
-          <Brand compact />
+          <Brand compact href={isStudy ? "/impuestos" : "/tablero"} />
           <span className="hidden border-l pl-4 text-xs text-muted-foreground sm:block">Gestión comercial</span>
         </div>
         <div className="hidden min-w-0 items-center gap-4 text-xs text-muted-foreground lg:flex">
-          <span className="max-w-80 truncate">{data.company.name}</span>
+          <span className="max-w-80 truncate">{selectedCompany ? `${selectedCompany.nombre} · CUIT ${formatCuit(selectedCompany.cuit)}` : data.company.name}</span>
           <span className="border-l pl-4">{data.user.name} · {data.role.name}</span>
         </div>
         <div className="lg:hidden">
@@ -223,6 +238,7 @@ export function PanelShell({ children }: { children: React.ReactNode }) {
           </SheetContent>
         </Sheet>
         <main className="min-w-0 overflow-x-auto">
+          {selectedCompany ? <div className="border-b bg-muted/60 px-4 py-2 text-xs lg:hidden"><span className="font-medium">{selectedCompany.nombre}</span><span className="ml-2 tabular-nums text-muted-foreground">CUIT {formatCuit(selectedCompany.cuit)}</span></div> : null}
           <OfflineBanner />
           {children}
         </main>
@@ -232,21 +248,35 @@ export function PanelShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ImpuestosTree({pathname,close}:{pathname:string;close:()=>void}){
-  const query=useQuery({queryKey:["impuestos-empresas"],queryFn:()=>apiSend<{items:EmpresaImpositiva[]}>("/api/impuestos/empresas","GET")});
-  const active=pathname==="/impuestos"||pathname.startsWith("/impuestos/");
-  return <details className="group" open={active||undefined}>
-    <summary className={`talon-nav-link cursor-pointer list-none ${active?"bg-sidebar-accent text-sidebar-accent-foreground":""}`}><Calculator className="size-4"/>Impuestos</summary>
-    <div className="ml-5 grid gap-0.5 border-l border-sidebar-border pl-2">
-      {(query.data?.items??[]).map(empresa=><Link key={empresa.id} href={`/impuestos/empresas/${empresa.id}`} onClick={close} className="rounded px-2 py-1.5 text-xs hover:bg-sidebar-accent" title={`${empresa.nombre} · ${formatCuit(empresa.cuit)}`}><span className="block truncate">{empresa.nombre}</span><span className="block truncate text-[10px] opacity-70">{formatCuit(empresa.cuit)}</span></Link>)}
-      <Link href="/impuestos/empresas/nueva" onClick={close} className="flex items-center gap-1 rounded px-2 py-1.5 text-xs hover:bg-sidebar-accent"><Plus className="size-3"/>Agregar empresa</Link>
-    </div>
-  </details>;
+function StudyTaxNav({ pathname, close, selected }: { pathname: string; close: () => void; selected: EmpresaImpositiva | null }) {
+  const companiesActive = pathname === "/impuestos" || pathname.includes("/editar") || pathname.includes("/nueva");
+  const sections = [
+    ["ventas", "Ventas"],
+    ["compras", "Compras"],
+    ["configuracion", "Configuración"],
+  ] as const;
+  return <>
+    <Link href="/impuestos" onClick={close} aria-current={companiesActive ? "page" : undefined} className="talon-nav-link"><Building2 className="size-4" />Empresas</Link>
+    <details className="group" open={pathname.startsWith("/impuestos/empresas/") || undefined}>
+      <summary className="talon-nav-link cursor-pointer list-none"><Calculator className="size-4" />Impuestos</summary>
+      <div className="ml-5 grid gap-0.5 border-l border-sidebar-border pl-2">
+        {selected ? <>
+          <p className="px-2 py-1 text-[10px] uppercase tracking-wide text-sidebar-foreground/60">Empresa seleccionada</p>
+          <p className="truncate px-2 text-xs font-semibold" title={selected.nombre}>{selected.nombre}</p>
+          <p className="px-2 pb-1 text-[10px] tabular-nums opacity-70">{formatCuit(selected.cuit)}</p>
+          {sections.map(([key, label]) => {
+            const href = `/impuestos/empresas/${selected.id}/${key}`;
+            return <Link key={key} href={href} onClick={close} aria-current={pathname === href ? "page" : undefined} className="rounded px-2 py-1.5 text-xs hover:bg-sidebar-accent aria-[current=page]:bg-sidebar-accent">{label}</Link>;
+          })}
+        </> : <Link href="/impuestos" onClick={close} className="rounded px-2 py-1.5 text-xs hover:bg-sidebar-accent">Elegí una empresa</Link>}
+      </div>
+    </details>
+  </>;
 }
 
-function Brand({ compact = false }: { compact?: boolean }) {
+function Brand({ compact = false, href = "/tablero" }: { compact?: boolean; href?: string }) {
   return (
-    <Link href="/tablero" className={compact ? "talon-brand" : "talon-brand px-3"}>
+    <Link href={href} className={compact ? "talon-brand" : "talon-brand px-3"}>
       Talón
       {compact ? null : <span className="mt-1 block font-sans text-xs font-normal tracking-normal text-sidebar-foreground/70">gestión comercial</span>}
     </Link>

@@ -1,5 +1,17 @@
 # CAMBIOS – Impuestos etapa 1
 
+## Pulido de estudio y configuración fiscal
+
+- En modo estudio, “Empresas” reemplaza al tablero y muestra tarjetas de clientes. “Impuestos” contiene Ventas, Compras y Configuración de la empresa seleccionada.
+- El nombre y CUIT seleccionados permanecen visibles en escritorio y celular. La selección se conserva al navegar.
+- Un puesto sin `impuestos.ver` no ve Empresas ni Impuestos y entra en Configuración en vez de caer en “Sin permiso”.
+- El alta de estudios ya no pide ni envía un rubro. La base conserva un valor interno por compatibilidad con el esquema existente.
+- Configuración general oculta stock, caja y módulos comerciales cuando la empresa es un estudio.
+- Configuración fiscal permite guardar por cliente puntos de venta, actividades, tolerancia y la opción predeterminada de crear contrapartes en Talón. Cada cambio queda en `audit_log`.
+- El total del Libro IVA queda fijo en el borde derecho y las contrapartes, incluido “Consumidor final”, permanecen en una línea.
+- La cookie funciona en una instalación local abierta por HTTP desde otro equipo de la red. En una publicación HTTPS se activa `TALON_COOKIE_SECURE=1`.
+- Verificación: TypeScript y build correctos; lint sin errores (3 advertencias conocidas); 135 pruebas unitarias, 10 pruebas DB/RLS y 14 circuitos completos aprobados.
+
 ## Árbol de empresas clientes (Parte 1)
 
 ### Decisión de modelo

@@ -124,7 +124,7 @@ export const createCompanySchema = z.object({
     "estacion",
     "inmobiliaria",
     "constructora",
-  ]),
+  ]).optional(),
   pointsOfSale: z
     .array(z.number().int().min(1).max(99999))
     .min(1)

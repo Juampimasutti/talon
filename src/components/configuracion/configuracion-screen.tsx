@@ -121,7 +121,7 @@ function CompanyConfiguration() {
               Punto de venta
               <Input type="number" value={company.pointOfSale} onChange={(event) => setCompany({ ...company, pointOfSale: Number(event.target.value) })} disabled={!editable} />
             </label>
-            <label className="flex items-center gap-2 text-sm">
+            {company.tipo !== "estudio" ? <><label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={company.blockNegativeStock} disabled={!editable} onChange={(event) => setCompany({ ...company, blockNegativeStock: event.target.checked })} />
               No dejar vender ni sacar stock en negativo
             </label>
@@ -140,7 +140,7 @@ function CompanyConfiguration() {
                 </label>
               ))}
             </div>
-            <p className="text-sm text-muted-foreground">Apagar un módulo lo oculta del menú y bloquea sus pantallas, pero no borra sus datos: al volver a prenderlo está todo como estaba.</p>
+            <p className="text-sm text-muted-foreground">Apagar un módulo lo oculta del menú y bloquea sus pantallas, pero no borra sus datos: al volver a prenderlo está todo como estaba.</p></> : <p className="text-sm text-muted-foreground">La configuración fiscal de cada cliente se administra desde Empresas.</p>}
             {editable ? <Button type="submit">Guardar empresa</Button> : <p className="text-sm text-muted-foreground">Estás en modo lectura.</p>}
           </form>
           <CompanyManagement />

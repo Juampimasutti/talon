@@ -21,7 +21,7 @@ export async function createCompany(
   rawInput: CreateCompanyInput,
 ) {
   const tipo = rawInput.tipo ?? defaultCompanyMode();
-  const input = { ...rawInput, tipo, enabledModules: modulesForMode(tipo, rawInput.enabledModules) };
+  const input = { ...rawInput, tipo, businessSector: rawInput.businessSector ?? "comercio", enabledModules: modulesForMode(tipo, rawInput.enabledModules) };
   const allowed = new Set<string>(
     MODULES.filter((item) => item.toggle && moduleAvailable(item.key)).map((item) => item.key),
   );

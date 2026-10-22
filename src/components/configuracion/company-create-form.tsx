@@ -53,7 +53,7 @@ export function CompanyCreateForm({ defaultMode = "negocio" }: { defaultMode?: C
           await apiSend("/api/empresas", "POST", {
             ...form,
             tipo,
-            businessSector: sector,
+            ...(tipo === "negocio" ? { businessSector: sector } : {}),
             enabledModules: tipo === "estudio" ? [...ESTUDIO_MODULES] : modules,
             pointsOfSale,
             basicLedger,

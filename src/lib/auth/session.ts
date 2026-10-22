@@ -145,7 +145,7 @@ export function cookieBase() {
   return {
     httpOnly: true,
     sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
+    secure: process.env.TALON_COOKIE_SECURE === "1",
     path: "/",
     maxAge: MAX_AGE,
   };
