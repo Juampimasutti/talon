@@ -1,0 +1,3 @@
+import{describe,expect,it}from"vitest";import{validarComprobanteManual}from"./comprobante-manual";
+const base={tipoCbte:1,docTipo:80,docNro:"20111111112",alicuotas:[{codigo:5,netoCents:10000,ivaCents:2100}],noGravadoCents:0,exentoCents:0,tributosCents:0,totalCents:12100,creditoFiscalCents:2100};
+describe("comprobante manual",()=>{it("valida total e IVA con tolerancia",()=>{expect(validarComprobanteManual(base,5)).toEqual([]);expect(validarComprobanteManual({...base,totalCents:12094},5)).toContain("Los componentes no coinciden con el total");});it("impide crédito en B/C",()=>expect(validarComprobanteManual({...base,tipoCbte:6,creditoFiscalCents:2100})).toContain("Los comprobantes B/C no generan crédito fiscal"));});

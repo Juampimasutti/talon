@@ -9,6 +9,8 @@ import { formatCuit } from "@/lib/fiscal/cuit";
 import { rememberEmpresa } from "@/lib/impuestos/seleccion";
 import { Button } from "@/components/ui/button";
 import { EmpresaTaxConfig } from "./empresa-tax-config";
+import { CertificadosScreen } from "./certificados-screen";
+import { ComprobanteManualScreen } from "./comprobante-manual-screen";
 import { SECCIONES_IMPUESTOS, type EmpresaImpositivaDetalle, type SeccionImpuestos } from "./empresa-types";
 
 export function EmpresaDetailScreen({ id, seccion }: { id: string; seccion?: SeccionImpuestos }) {
@@ -36,16 +38,18 @@ export function EmpresaDetailScreen({ id, seccion }: { id: string; seccion?: Sec
         <div className="flex gap-2"><Link className="inline-flex h-8 items-center rounded-lg border px-3 text-sm" href={`/impuestos/empresas/${id}/editar`}>Editar</Link><Button variant="destructive" onClick={deactivate}>Dar de baja</Button></div>
       </div>
     </header>
-    {!seccion ? <section className="grid gap-2 text-sm sm:grid-cols-4"><Stat label="Compras" value={counts.compras} /><Stat label="Ventas" value={counts.ventas} /><Stat label="Períodos" value={counts.periodos} /><Stat label="Liquidaciones" value={counts.liquidaciones} /></section> :
+    {!seccion ? <><section className="grid gap-2 text-sm sm:grid-cols-4"><Stat label="Compras" value={counts.compras} /><Stat label="Ventas" value={counts.ventas} /><Stat label="Períodos" value={counts.periodos} /><Stat label="Liquidaciones" value={counts.liquidaciones} /></section>{query.data.vencimientos.length ? <section className="rounded border bg-card p-4"><h2 className="font-semibold">Vencimientos publicados</h2><ul className="mt-2 divide-y text-sm">{query.data.vencimientos.map(item=><li key={`${item.obligacion}-${item.periodo}`} className="flex justify-between gap-3 py-2"><span>{item.obligacion.replaceAll("_"," ")} · {item.periodo.slice(4)}/{item.periodo.slice(0,4)}</span><time>{String(item.fecha).slice(0,10).split("-").reverse().join("/")}</time></li>)}</ul></section>:null}</> :
       <section className="space-y-4 rounded border bg-card p-4">
         <h2 className="font-semibold">{title}</h2>
-        {seccion === "configuracion" ? <EmpresaTaxConfig id={id} data={query.data} /> : <>
+        {seccion === "configuracion" ? <EmpresaTaxConfig id={id} data={query.data} /> : seccion === "certificados" ? <CertificadosScreen empresaId={id} /> : seccion === "carga-ventas" ? <ComprobanteManualScreen empresaId={id} libro="ventas" /> : seccion === "carga-compras" ? <ComprobanteManualScreen empresaId={id} libro="compras" /> : <>
           <p className="text-sm text-muted-foreground">Los datos de esta sección corresponden exclusivamente a {empresa.nombre}.</p>
           {seccion === "ventas" ? <InternalLinks links={[
             [`/impuestos/empresas/${id}/libro-iva?libro=ventas`, "Libro IVA Ventas"],
             [`/impuestos/empresas/${id}/liquidacion`, "Liquidación de IVA"],
+            [`/impuestos/empresas/${id}/certificados`, "Retenciones y percepciones"],
+            [`/impuestos/empresas/${id}/carga-ventas`, "Cargar comprobante"],
           ]} /> : null}
-          {seccion === "compras" ? <InternalLinks links={[[`/impuestos/empresas/${id}/libro-iva?libro=compras`, "Libro IVA Compras"]]} /> : null}
+          {seccion === "compras" ? <InternalLinks links={[[`/impuestos/empresas/${id}/libro-iva?libro=compras`, "Libro IVA Compras"],[`/impuestos/empresas/${id}/carga-compras`, "Cargar comprobante"]]} /> : null}
           {seccion === "ventas" ? <div className="grid gap-2 text-sm sm:grid-cols-2"><Stat label="Comprobantes de ventas" value={counts.ventas} /><Stat label="Liquidaciones" value={counts.liquidaciones} /></div> :
             seccion === "compras" ? <div className="grid gap-2 text-sm sm:grid-cols-2"><Stat label="Comprobantes de compras" value={counts.compras} /></div> :
               <div className="grid gap-2 text-sm sm:grid-cols-4"><Stat label="Compras" value={counts.compras} /><Stat label="Ventas" value={counts.ventas} /><Stat label="Períodos" value={counts.periodos} /><Stat label="Liquidaciones" value={counts.liquidaciones} /></div>}
