@@ -135,7 +135,7 @@ describe.skipIf(!enabled)("impuestos RLS", () => {
 
   it("incluye las 13 tablas tenant de impuestos en respaldo y restauración dinámica", async () => {
     const [snapshot]=await admin!`select company_snapshot(${companyA}) data`;
-    const tenantTables=["imp_empresas","imp_config","imp_puntos_venta","imp_actividades","imp_contrapartes","imp_mapeo_tributos","imp_periodos","imp_import_jobs","imp_comprobantes","imp_comprobante_alicuotas","imp_import_rows","imp_liquidaciones","imp_liquidacion_items"];
+    const tenantTables=["imp_empresas","imp_config","imp_puntos_venta","imp_actividades","imp_contrapartes","imp_mapeo_tributos","imp_periodos","imp_import_jobs","imp_comprobantes","imp_comprobante_alicuotas","imp_import_rows","imp_liquidaciones","imp_liquidacion_items","imp_retenciones_percepciones","imp_retenciones_practicadas"];
     for(const table of tenantTables) expect(snapshot.data).toHaveProperty(table);
   });
 
