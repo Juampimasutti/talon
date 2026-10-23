@@ -44,6 +44,7 @@ describe("liquidación IVA", () => {
     const coefficient = coeficienteProrrateo(15_000_000, 5_000_000, 0);
     expect(coefficient).toBe(7_500);
     expect(aplicarProrrateo(270_000, coefficient)).toBe(202_500);
+    expect(coeficienteProrrateo(0, 0, 0)).toBe(10_000);
   });
 
   it("convierte moneda extranjera por alícuota antes de liquidar", () => {
