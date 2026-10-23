@@ -12,6 +12,9 @@ export function EmpresaTaxConfig({ id, data }: { id: string; data: EmpresaImposi
   const queryClient = useQueryClient();
   const [tolerance, setTolerance] = useState((data.config.toleranciaCents / 100).toFixed(2).replace(".", ","));
   const [createInTalon, setCreateInTalon] = useState(data.config.crearEnTalonDefault);
+  const [esquemaIva, setEsquemaIva] = useState(data.config.esquemaIva);
+  const [ivaSimpleDesde, setIvaSimpleDesde] = useState(data.config.ivaSimpleDesde ?? "202511");
+  const [coeficiente, setCoeficiente] = useState(data.config.coeficienteProrrateoBps == null ? "" : String(data.config.coeficienteProrrateoBps / 100).replace(".",","));
   const [points, setPoints] = useState(data.puntosVenta.map(item => item.numero).join(", "));
   const [activities, setActivities] = useState(data.actividades.map(item => `${item.codigo}; ${item.descripcion}${item.principal ? "; principal" : ""}`).join("\n"));
   const [pending, setPending] = useState(false);
@@ -30,6 +33,9 @@ export function EmpresaTaxConfig({ id, data }: { id: string; data: EmpresaImposi
       await apiSend(`/api/impuestos/empresas/${id}/configuracion`, "PATCH", {
         toleranciaCents: Math.round(parsedTolerance * 100),
         crearEnTalonDefault: createInTalon,
+        esquemaIva,
+        ivaSimpleDesde,
+        coeficienteProrrateoBps: coeficiente.trim() ? Math.round(Number(coeficiente.replace(",","."))*100) : null,
         puntosVenta,
         actividades,
       });
@@ -41,6 +47,9 @@ export function EmpresaTaxConfig({ id, data }: { id: string; data: EmpresaImposi
   }
 
   return <form onSubmit={save} className="grid max-w-2xl gap-4">
+    <div className="grid gap-1"><label htmlFor="tax-scheme" className="text-sm font-medium">Esquema de IVA</label><select id="tax-scheme" className="h-9 rounded-md border bg-background px-3 text-sm" value={esquemaIva} onChange={event => setEsquemaIva(event.target.value as "iva_simple"|"f2002_lid")}><option value="iva_simple">IVA Simple · F.2051</option><option value="f2002_lid">F.2002 + Libro IVA Digital</option></select><p className="text-xs text-muted-foreground">Para responsables inscriptos, IVA Simple corresponde desde noviembre de 2025.</p></div>
+    <div className="grid gap-1"><label htmlFor="tax-simple-from" className="text-sm font-medium">IVA Simple desde</label><Input id="tax-simple-from" inputMode="numeric" pattern="[0-9]{6}" value={ivaSimpleDesde} onChange={event => setIvaSimpleDesde(event.target.value)} placeholder="202511" /></div>
+    <div className="grid gap-1"><label htmlFor="tax-proration" className="text-sm font-medium">Coeficiente manual de prorrateo (%)</label><Input id="tax-proration" inputMode="decimal" value={coeficiente} onChange={event => setCoeficiente(event.target.value)} placeholder="Vacío: calcular con las ventas del período" /></div>
     <div className="grid gap-1"><label htmlFor="tax-tolerance" className="text-sm font-medium">Tolerancia de diferencias ($)</label><Input id="tax-tolerance" inputMode="decimal" value={tolerance} onChange={event => setTolerance(event.target.value)} /><p className="text-xs text-muted-foreground">Margen permitido al comparar totales importados. Por ejemplo, 0,05 equivale a cinco centavos.</p></div>
     <div className="grid gap-1"><label htmlFor="tax-points" className="text-sm font-medium">Puntos de venta</label><Input id="tax-points" value={points} onChange={event => setPoints(event.target.value)} placeholder="1, 2, 5" /><p className="text-xs text-muted-foreground">Separados por coma.</p></div>
     <div className="grid gap-1"><label htmlFor="tax-activities" className="text-sm font-medium">Actividades</label><textarea id="tax-activities" className="min-h-28 rounded-md border bg-background px-3 py-2 text-sm" value={activities} onChange={event => setActivities(event.target.value)} placeholder={"Código; Descripción; principal\nCódigo; Descripción"} /><p className="text-xs text-muted-foreground">Una por línea. Usá “principal” en la tercera columna para marcar la actividad principal.</p></div>
