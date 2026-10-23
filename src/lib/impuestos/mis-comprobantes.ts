@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx";
 import { normalizarMoneda } from "./libro-iva-digital";
 import { isValidCuit } from "@/lib/fiscal/cuit";
+import { reglaFechaImportada } from "./periodo";
 
 const RATE_COLUMNS = [
   { bps: 0, code: 3, net: "Neto Grav. IVA 0%", vat: null },
@@ -23,6 +24,7 @@ export type ImportedRow = {
   identidad: string;
   libro: "ventas" | "compras";
   fecha: string;
+  fechaVencimientoPago: string | null;
   periodo: string;
   tipoCbte: number;
   signo: 1 | -1;
@@ -49,6 +51,7 @@ export type ParseOptions = {
   companyCuit: string;
   toleranceCents?: number;
   existingIdentities?: Iterable<string>;
+  periodo?: string;
 };
 
 function normalized(value: unknown) {
@@ -104,6 +107,7 @@ export function parseMisComprobantesXlsx(input: Buffer | Uint8Array, options: Pa
     const raw = Object.fromEntries(headers.map((h, i) => [h, source[i]]));
     const tipoCbte = Number(String(get("Tipo") ?? "").split("-")[0].trim());
     const fecha = isoDate(get("Fecha"));
+    const fechaVencimientoPago = isoDate(get("Fecha Vto. Pago") ?? get("Fecha Vencimiento Pago")) || null;
     const puntoVenta = Number(get("Punto de Venta"));
     const numeroDesde = normalized(get("Número Desde"));
     const numeroHasta = normalized(get("Número Hasta")) || numeroDesde;
@@ -131,8 +135,11 @@ export function parseMisComprobantesXlsx(input: Buffer | Uint8Array, options: Pa
     const avisos: string[] = [];
     let estado: ImportedRow["estado"] = "ok";
     let motivo: string | undefined;
+    const libro = tipo === "emitidos" ? "ventas" : "compras";
+    const reglaFecha = options.periodo ? reglaFechaImportada(libro, fecha, options.periodo) : {};
     if (existing.has(identity) || seen.has(identity)) { estado = "duplicado"; motivo = "Comprobante ya importado"; }
     else if (!fecha || !Number.isInteger(tipoCbte) || !Number.isInteger(puntoVenta) || !numeroDesde) { estado = "rechazado"; motivo = "Datos obligatorios inválidos"; }
+    else if (reglaFecha.rechazo) { estado = "rechazado"; motivo = reglaFecha.rechazo; }
     else if (docTipo === 80 && !isValidCuit(docNro)) { estado = "rechazado"; motivo = "CUIT de contraparte inválido"; }
     else if (!NON_DISCRIMINATING.has(tipoCbte) && Math.abs(difference) > tolerance) { estado = "rechazado"; motivo = `Los componentes difieren del total en ${Math.abs(difference)} centavos`; }
     else if (!NON_DISCRIMINATING.has(tipoCbte) && difference !== 0) {
@@ -142,15 +149,16 @@ export function parseMisComprobantesXlsx(input: Buffer | Uint8Array, options: Pa
     for (const rate of rates) {
       if (Math.abs(rate.netoCents) <= 5 && Math.abs(rate.ivaCents) <= 5) avisos.push(`Residuo de centavo en IVA ${rate.bps / 100}%`);
     }
-    if ((tipo === "recibidos") && normalized(get("Nro. Doc. Receptor")) && normalized(get("Nro. Doc. Receptor")) !== titularCuit) {
-      avisos.push("El receptor informado no coincide con el titular");
+    if (reglaFecha.aviso) avisos.push(reglaFecha.aviso);
+    if ((tipo === "recibidos") && soloDigitos(get("Nro. Doc. Receptor")) && soloDigitos(get("Nro. Doc. Receptor")) !== titularCuit) {
+      avisos.push("El receptor no coincide con la empresa");
     }
     const moneda = normalizarMoneda(normalized(get("Moneda")));
     if (moneda !== "PES" || Number(get("Tipo Cambio") ?? 1) !== 1) avisos.push("Moneda extranjera: revisar conversión a pesos");
     seen.add(identity);
     rows.push({
-      fila: ri + 1, estado, motivo, avisos, identidad: identity, libro: tipo === "emitidos" ? "ventas" : "compras",
-      fecha, periodo: fecha.slice(0, 7).replace("-", ""), tipoCbte, signo: sign, puntoVenta, numeroDesde, numeroHasta,
+      fila: ri + 1, estado, motivo, avisos, identidad: identity, libro,
+      fecha, fechaVencimientoPago, periodo: fecha.slice(0, 7).replace("-", ""), tipoCbte, signo: sign, puntoVenta, numeroDesde, numeroHasta,
       cae: normalized(get("Cód. Autorización")), docTipo, docNro,
       denominacion: denominacion || "Consumidor final", moneda,
       tipoCambio: Number(get("Tipo Cambio") ?? 1), alicuotas: rates, netoNoGravadoCents, exentoCents,

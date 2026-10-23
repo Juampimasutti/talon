@@ -3,15 +3,18 @@ import { sql } from "drizzle-orm";
 import type { Tx } from "@/lib/db/tenant";
 import { ImportValidationError, parseMisComprobantesXlsx, soloDigitos } from "./mis-comprobantes";
 import { condicionDesdeComprobante, documentoTalon } from "./contraparte-talon";
+import { mensajePeriodoCerrado } from "./periodo";
 
 export type ImportContext = { companyId:string; userId:string; companyCuit:string; canCreateCustomer:boolean; canCreateSupplier:boolean };
 
 export async function importarMisComprobantes(tx:Tx,context:ImportContext,file:Buffer,fileName:string,periodo:string,crearEnTalon=false){
+  const [closed]=await tx.execute<{closed:boolean}>(sql`select exists(select 1 from imp_periodos where periodo=${periodo} and estado='cerrado') closed`);
+  if(closed?.closed) throw new ImportValidationError(mensajePeriodoCerrado(periodo),409);
   // Identidad con CUIT sin guiones: la empresa puede tener el CUIT guardado como "30-71458901-2".
   const prior=await tx.execute<{identity:string}>(sql`select regexp_replace(doc_nro_emisor,'\\D','','g')||'|'||tipo_cbte||'|'||punto_venta||'|'||numero_desde identity from imp_comprobantes`);
   const companyCuit=soloDigitos(context.companyCuit);
   const letras=new Map((await tx.execute<{codigo:number;letra:string|null}>(sql`select codigo,letra from imp_tipos_comprobante`)).map(r=>[Number(r.codigo),r.letra]));
-  const parsed=parseMisComprobantesXlsx(file,{companyCuit:context.companyCuit,existingIdentities:prior.map(r=>r.identity)});
+  const parsed=parseMisComprobantesXlsx(file,{companyCuit:context.companyCuit,existingIdentities:prior.map(r=>r.identity),periodo});
   if(crearEnTalon && parsed.tipo==="emitidos" && !context.canCreateCustomer) throw new ImportValidationError("Para crear las contrapartes en Talón falta el permiso clientes.crear",403);
   if(crearEnTalon && parsed.tipo==="recibidos" && !context.canCreateSupplier) throw new ImportValidationError("Para crear las contrapartes en Talón falta el permiso proveedores.crear",403);
   const hash=createHash("sha256").update(file).digest("hex");
@@ -37,10 +40,10 @@ export async function importarMisComprobantes(tx:Tx,context:ImportContext,file:B
           else await tx.execute(sql`update imp_contrapartes set supplier_id=${party.id}::uuid,condicion_a_revisar=${revisar} where id=${counterpart.id}::uuid`);
         }
       }
-      const [receipt]=await tx.execute<{id:string}>(sql`insert into imp_comprobantes(company_id,libro,origen,fecha_cbte,periodo,tipo_cbte,punto_venta,numero_desde,numero_hasta,cae,
+      const [receipt]=await tx.execute<{id:string}>(sql`insert into imp_comprobantes(company_id,libro,origen,fecha_cbte,fecha_vencimiento_pago,periodo,tipo_cbte,punto_venta,numero_desde,numero_hasta,cae,
         doc_nro_emisor,doc_tipo,doc_nro,denominacion,contraparte_id,moneda,tipo_cambio,neto_no_gravado_cents,exento_cents,otros_tributos_cents,total_cents,
         credito_fiscal_computable_cents,requiere_revision,avisos,created_by)
-        values(${context.companyId},${row.libro},'mis_comprobantes',${row.fecha}::date,${periodo||row.periodo},${row.tipoCbte},${row.puntoVenta},${row.numeroDesde},${row.numeroHasta},${row.cae},
+        values(${context.companyId},${row.libro},'mis_comprobantes',${row.fecha}::date,${row.fechaVencimientoPago}::date,${periodo||row.periodo},${row.tipoCbte},${row.puntoVenta},${row.numeroDesde},${row.numeroHasta},${row.cae},
         ${row.libro==="ventas"?companyCuit:row.docNro},${row.docTipo},${row.docNro},${row.denominacion},${counterpartId}::uuid,${row.moneda},${row.tipoCambio},
         ${row.netoNoGravadoCents},${row.exentoCents},${row.otrosTributosCents},${row.totalCents},${row.creditoFiscalComputableCents},
         ${row.avisos.length>0},${JSON.stringify(row.avisos)}::jsonb,${context.userId}::uuid) returning id`);
