@@ -5,7 +5,13 @@ export type LineaFiscal = {
   creditoComputableCents?: number;
   percepIvaCents?: number;
   tipoOperacion?: string;
+  /** Tipo de cambio ARCA. Los importes se conservan en moneda original y se convierten por línea. */
+  tipoCambio?: number;
 };
+
+export function convertirCentsAPesos(cents: number, tipoCambio = 1) {
+  return Math.round(cents * tipoCambio);
+}
 
 export type AjustesLiquidacion = {
   /** Saldo técnico a favor del período anterior (sólo compensa débito fiscal). */
@@ -39,8 +45,8 @@ export function aplicarProrrateo(ivaCents: number, coeficienteBps: number) {
 export function calcularLiquidacion(lineas: LineaFiscal[], ajustes: AjustesLiquidacion = {}) {
   const ventas = lineas.filter((l) => l.libro === "ventas");
   const compras = lineas.filter((l) => l.libro === "compras");
-  const debitoFiscalCents = ventas.reduce((n, l) => n + l.ivaCents * (l.signo ?? 1), 0);
-  const creditoComprasCents = compras.reduce((n, l) => n + (l.creditoComputableCents ?? l.ivaCents) * (l.signo ?? 1), 0);
+  const debitoFiscalCents = ventas.reduce((n, l) => n + convertirCentsAPesos(l.ivaCents, l.tipoCambio) * (l.signo ?? 1), 0);
+  const creditoComprasCents = compras.reduce((n, l) => n + convertirCentsAPesos(l.creditoComputableCents ?? l.ivaCents, l.tipoCambio) * (l.signo ?? 1), 0);
   const seguridadSocialCents = ajustes.seguridadSocialCents ?? 0;
   const creditoFiscalCents = creditoComprasCents + seguridadSocialCents;
   const saldoTecnicoCents = debitoFiscalCents - creditoFiscalCents;
@@ -48,7 +54,7 @@ export function calcularLiquidacion(lineas: LineaFiscal[], ajustes: AjustesLiqui
   const despuesSaldoTecnicoAnteriorCents = saldoTecnicoCents - saldoTecnicoAnteriorCents;
   const impuestoDeterminadoCents = Math.max(0, despuesSaldoTecnicoAnteriorCents);
   const saldoTecnicoAFavorCents = Math.max(0, -despuesSaldoTecnicoAnteriorCents);
-  const percepcionesComprobantesCents = compras.reduce((n, l) => n + (l.percepIvaCents ?? 0) * (l.signo ?? 1), 0);
+  const percepcionesComprobantesCents = compras.reduce((n, l) => n + convertirCentsAPesos(l.percepIvaCents ?? 0, l.tipoCambio) * (l.signo ?? 1), 0);
   const percepcionesIvaCents = percepcionesComprobantesCents + (ajustes.percepcionesCents ?? 0);
   const saldoLibreAnteriorCents = ajustes.saldoLibreAnteriorCents ?? 0;
   const retencionesCents = ajustes.retencionesCents ?? 0;

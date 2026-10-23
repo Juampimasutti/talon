@@ -45,4 +45,11 @@ describe("liquidación IVA", () => {
     expect(coefficient).toBe(7_500);
     expect(aplicarProrrateo(270_000, coefficient)).toBe(202_500);
   });
+
+  it("convierte moneda extranjera por alícuota antes de liquidar", () => {
+    const result = calcularLiquidacion([
+      { libro: "compras", ivaCents: 21_000, creditoComputableCents: 21_000, tipoCambio: 1050.5 },
+    ]);
+    expect(result.creditoComprasCents).toBe(22_060_500);
+  });
 });

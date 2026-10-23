@@ -10,7 +10,7 @@ import { HttpError, ok } from "@/lib/http";
 import { cuitDigits, formatCuit, isValidCuit } from "@/lib/fiscal/cuit";
 import { writeAudit } from "@/lib/domain/audit";
 import { readBody } from "@/lib/validation";
-import { calcularLiquidacion, itemsLiquidacion, periodoAnterior, saldosQueArrastra } from "@/lib/impuestos/calculos";
+import { calcularLiquidacion, convertirCentsAPesos, itemsLiquidacion, periodoAnterior, saldosQueArrastra } from "@/lib/impuestos/calculos";
 import { importarMisComprobantes } from "@/lib/impuestos/importar";
 import { traerDeTalon } from "@/lib/impuestos/traer-de-talon";
 import { toAnsi } from "@/lib/impuestos/libro-iva-digital";
@@ -173,7 +173,7 @@ export async function impuestos(method:string,path:string[],req:Request){
       const built=buildLibroIvaDigital(receipts,rates);
       const zip=makeZip(Object.entries(built.files).map(([name,content])=>({name:`${name}_${periodo}.txt`,data:toAnsi(content)})));
       if(url.searchParams.get("formato")==="zip") return new Response(new Uint8Array(zip),{headers:{"Content-Type":"application/zip","Content-Disposition":`attachment; filename="libro-iva-digital-${periodo}.zip"`,"Cache-Control":"private, no-store"}});
-      const spreadsheetRows=receipts.map(r=>({Libro:r.libro,Fecha:String(r.fecha_cbte).slice(0,10),Tipo:r.tipo_cbte,"Punto de venta":r.punto_venta,Número:r.numero_desde,Contraparte:r.denominacion,Total:Number(r.total_cents)/100,"Crédito fiscal":Number(r.credito_fiscal_computable_cents)/100}));
+      const spreadsheetRows=receipts.map(r=>({Libro:r.libro,Fecha:String(r.fecha_cbte).slice(0,10),Tipo:r.tipo_cbte,"Punto de venta":r.punto_venta,Número:r.numero_desde,Contraparte:r.denominacion,Moneda:r.moneda,"Tipo de cambio":Number(r.tipo_cambio),Total:convertirCentsAPesos(Number(r.total_cents),Number(r.tipo_cambio))/100,"Crédito fiscal":convertirCentsAPesos(Number(r.credito_fiscal_computable_cents),Number(r.tipo_cambio))/100}));
       const csv=`\uFEFFLibro;Fecha;Tipo;Punto de venta;Número;Contraparte;Total;Crédito fiscal\r\n${spreadsheetRows.map(r=>Object.values(r).map(v=>`"${(typeof v==="number"?v.toFixed(2).replace(".",","):String(v??"")).replaceAll('"','""')}"`).join(";")).join("\r\n")}${spreadsheetRows.length?"\r\n":""}`;
       const workbook=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(workbook,XLSX.utils.json_to_sheet(spreadsheetRows),"Libro IVA");
       return ok({periodo,files:built.files,avisos:built.avisos,zipBase64:zip.toString("base64"),csv,xlsxBase64:XLSX.write(workbook,{type:"base64",bookType:"xlsx"})});
@@ -191,10 +191,13 @@ export async function impuestos(method:string,path:string[],req:Request){
   if(method==="POST"&&resource==="liquidacion"){
     const auth=await requirePermission("impuestos","crear"); const body=await readBody(req,confirmSchema);
     return withImpuestos(auth,url,async tx=>{
-      const rows=await tx.execute<{libro:"ventas"|"compras";signo:number;iva:string;credito:string;percep:string}>(sql`
-        select c.libro,t.signo,coalesce(sum(a.iva_cents),0)::text iva,c.credito_fiscal_computable_cents::text credito,c.percep_iva_cents::text percep
+      const rows=await tx.execute<{libro:"ventas"|"compras";signo:number;iva:string;credito:string;percep:string;tipoCambio:number}>(sql`
+        select c.libro,t.signo,coalesce(a.iva_cents,0)::text iva,
+          (case when c.credito_fiscal_computable_cents<>0 then coalesce(a.iva_cents,0) else 0 end)::text credito,
+          (case when row_number() over(partition by c.id order by a.id nulls first)=1 then c.percep_iva_cents else 0 end)::text percep,
+          c.tipo_cambio::float8 "tipoCambio"
         from imp_comprobantes c join imp_tipos_comprobante t on t.codigo=c.tipo_cbte left join imp_comprobante_alicuotas a on a.comprobante_id=c.id
-        where c.periodo=${body.periodo} and c.estado='vigente' group by c.id,t.signo`);
+        where c.periodo=${body.periodo} and c.estado='vigente'`);
       const [actual]=await tx.execute<{estado:string}>(sql`select estado from imp_liquidaciones where periodo=${body.periodo}`);
       if(actual?.estado==="confirmada") throw new HttpError(409,PERIODO_CONFIRMADO);
       const anterior=periodoAnterior(body.periodo); const avisos:string[]=[];
@@ -206,7 +209,7 @@ export async function impuestos(method:string,path:string[],req:Request){
       const libreManual=body.saldoLibreAnteriorCents!=null&&body.saldoLibreAnteriorCents!==(arrastre?.saldoLibreAnteriorCents??0);
       if(prev&&(tecnicoManual||libreManual)) avisos.push(`Los saldos anteriores cargados a mano difieren de la liquidación confirmada de ${fmtPeriodo(anterior)}.`);
       const ajustes={...body,saldoTecnicoAnteriorCents:body.saldoTecnicoAnteriorCents??arrastre?.saldoTecnicoAnteriorCents??0,saldoLibreAnteriorCents:body.saldoLibreAnteriorCents??arrastre?.saldoLibreAnteriorCents??0};
-      const totals={...calcularLiquidacion(rows.map(r=>({libro:r.libro,signo:r.signo as 1|-1,ivaCents:Number(r.iva),creditoComputableCents:r.libro==="compras"?Number(r.credito):undefined,percepIvaCents:Number(r.percep)})),ajustes),periodoAnterior:anterior,saldosAnterioresAutomaticos:Boolean(prev)&&!tecnicoManual&&!libreManual};
+      const totals={...calcularLiquidacion(rows.map(r=>({libro:r.libro,signo:r.signo as 1|-1,ivaCents:Number(r.iva),creditoComputableCents:r.libro==="compras"?Number(r.credito):undefined,percepIvaCents:Number(r.percep),tipoCambio:Number(r.tipoCambio)})),ajustes),periodoAnterior:anterior,saldosAnterioresAutomaticos:Boolean(prev)&&!tecnicoManual&&!libreManual};
       const items=itemsLiquidacion(totals,{saldoTecnicoAnterior:tecnicoManual||(!prev&&ajustes.saldoTecnicoAnteriorCents>0),saldoLibreAnterior:libreManual||(!prev&&ajustes.saldoLibreAnteriorCents>0),percepciones:body.percepcionesCents>0,retenciones:body.retencionesCents>0,pagosCuenta:body.pagosCuentaCents>0,seguridadSocial:body.seguridadSocialCents>0});
       const state=body.confirmar?"confirmada":"borrador"; const snapshot=body.confirmar?JSON.stringify({totals,inputs:ajustes,items}):null;
       let saved:Record<string,unknown>;

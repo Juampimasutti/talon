@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { COMPRAS_ALICUOTAS, COMPRAS_CBTE, IMPORTACION_BIENES_ALICUOTA, VENTAS_ALICUOTAS, VENTAS_CBTE, codigoOperacion, formatFixed, makeTxt, normalizarMoneda, toAnsi } from ".";
 import { makeZip } from "./zip";
+import { buildLibroIvaDigital } from "./build";
 
 // Golden files armados campo por campo según el Anexo I de ARCA (RG 4597).
 const z = (n: number, w: number) => String(n).padStart(w, "0");
@@ -69,5 +70,20 @@ describe("Libro IVA Digital — golden RG 4597", () => {
     writeFileSync(join(dir, "x.zip"), makeZip([{ name: "A.txt", data: toAnsi(txt) }, { name: "B.txt", data: Buffer.from("") }]));
     const list = execFileSync("python3", ["-c", "import zipfile,sys;z=zipfile.ZipFile(sys.argv[1]);print(z.testzip(),[len(z.read(n)) for n in z.namelist()])", join(dir, "x.zip")]).toString().trim();
     expect(list).toBe(`None [${txt.length}, 0]`);
+  });
+  it("convierte DOL a pesos y conserva moneda y tipo de cambio", () => {
+    const built = buildLibroIvaDigital([{
+      id: "dol", libro: "compras", fecha_cbte: "2026-09-05", tipo_cbte: 1, punto_venta: 3,
+      numero_desde: "10", numero_hasta: "10", doc_tipo: 80, doc_nro: "20123456786",
+      denominacion: "PROVEEDOR", total_cents: 121_000, moneda: "DOL", tipo_cambio: 1050.5,
+      credito_fiscal_computable_cents: 21_000,
+    }], [{ comprobante_id: "dol", alicuota_codigo: 5, neto_cents: 100_000, iva_cents: 21_000 }]);
+    const head = built.files.LIBRO_IVA_DIGITAL_COMPRAS_CBTE;
+    const rate = built.files.LIBRO_IVA_DIGITAL_COMPRAS_ALICUOTAS;
+    expect(head.slice(104, 119)).toBe(imp(127_110_500));
+    expect(head.slice(224, 227)).toBe("DOL");
+    expect(head.slice(227, 237)).toBe("1050500000");
+    expect(rate.slice(50, 65)).toBe(imp(105_050_000));
+    expect(rate.slice(69, 84)).toBe(imp(22_060_500));
   });
 });
