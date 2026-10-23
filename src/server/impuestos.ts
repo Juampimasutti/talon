@@ -10,15 +10,19 @@ import { HttpError, ok } from "@/lib/http";
 import { cuitDigits, formatCuit, isValidCuit } from "@/lib/fiscal/cuit";
 import { writeAudit } from "@/lib/domain/audit";
 import { readBody } from "@/lib/validation";
-import { calcularLiquidacion, convertirCentsAPesos, itemsLiquidacion, periodoAnterior, saldosQueArrastra } from "@/lib/impuestos/calculos";
+import { aplicarProrrateo, calcularLiquidacion, coeficienteProrrateo, convertirCentsAPesos, itemsLiquidacion, periodoAnterior, saldosQueArrastra } from "@/lib/impuestos/calculos";
 import { importarMisComprobantes } from "@/lib/impuestos/importar";
 import { traerDeTalon } from "@/lib/impuestos/traer-de-talon";
 import { toAnsi } from "@/lib/impuestos/libro-iva-digital";
 import { buildLibroIvaDigital } from "@/lib/impuestos/libro-iva-digital/build";
 import { makeZip } from "@/lib/impuestos/libro-iva-digital/zip";
 import * as XLSX from "xlsx";
+import { esErrorPeriodoCerrado, mensajePeriodoCerrado, periodoSchema } from "@/lib/impuestos/periodo";
+import { condicionIvaSchema, puedeLiquidarF2002 } from "@/lib/impuestos/condicion-iva";
+import { validarPeriodoComputo } from "@/lib/impuestos/retenciones";
+import { validarComprobanteManual } from "@/lib/impuestos/comprobante-manual";
 
-const period=z.string().regex(/^\d{6}$/,"Período inválido");
+const period=periodoSchema;
 const importSchema=z.object({fileName:z.string().min(1).max(200),base64:z.string().min(1),periodo:period,crearEnTalon:z.boolean().default(false)});
 const cents=z.number().int().min(0).max(1e15);
 // Saldos anteriores: si vienen vacíos se toman de la liquidación confirmada del período anterior.
@@ -30,17 +34,23 @@ const empresaSchema=z.object({
   nombre:z.string().trim().min(1).max(120),
   razonSocial:z.string().trim().min(1).max(160),
   cuit:z.string().trim().refine(isValidCuit,"CUIT inválido"),
-  condicionIva:z.string().trim().min(1).max(40),
+  condicionIva:condicionIvaSchema,
   rubro:z.string().trim().max(120).nullish(),
 });
 const empresaConfigSchema=z.object({
   toleranciaCents:z.number().int().min(0).max(10000),
   crearEnTalonDefault:z.boolean(),
+  esquemaIva:z.enum(["iva_simple","f2002_lid"]).default("iva_simple"),
+  ivaSimpleDesde:periodoSchema.nullable().default("202511"),
+  coeficienteProrrateoBps:z.number().int().min(0).max(10000).nullable().default(null),
   puntosVenta:z.array(z.number().int().min(1).max(99999)).max(100).refine(v=>new Set(v).size===v.length,"Hay puntos de venta repetidos"),
   actividades:z.array(z.object({codigo:z.string().trim().min(1).max(30),descripcion:z.string().trim().min(1).max(160),principal:z.boolean()})).max(100)
     .refine(v=>new Set(v.map(a=>a.codigo)).size===v.length,"Hay códigos de actividad repetidos")
     .refine(v=>v.filter(a=>a.principal).length<=1,"Sólo puede haber una actividad principal"),
 });
+const rpSchema=z.object({tipo:z.enum(["retencion","percepcion"]),regimen:z.string().trim().min(1).max(40),agenteCuit:z.string().trim().refine(isValidCuit,"CUIT inválido"),agenteDenominacion:z.string().trim().min(1).max(160),fecha:z.string().date(),numeroCertificado:z.string().trim().min(1).max(80),importeCents:z.number().int().positive(),periodoOrigen:periodoSchema,periodoComputo:periodoSchema,comprobanteId:z.string().uuid().nullable().default(null)});
+const manualSchema=z.object({libro:z.enum(["ventas","compras"]),fecha:z.string().date(),periodo:periodoSchema,tipoCbte:z.number().int(),puntoVenta:z.number().int().min(0).max(99999),numero:z.string().regex(/^\d+$/),docTipo:z.number().int(),docNro:z.string().trim().min(1).max(20),denominacion:z.string().trim().min(1).max(160),moneda:z.string().trim().length(3).default("PES"),tipoCambio:z.number().positive().default(1),noGravadoCents:cents.default(0),exentoCents:cents.default(0),tributosCents:cents.default(0),totalCents:z.number().int(),creditoFiscalCents:cents.default(0),destinoCredito:z.enum(["directo_gravado","directo_exento","prorratea"]).default("directo_gravado"),alicuotas:z.array(z.object({codigo:z.number().int(),netoCents:z.number().int(),ivaCents:z.number().int()})).max(10)});
+const practicadaSchema=z.object({tipo:z.enum(["retencion","percepcion"]),sujetoCuit:z.string().refine(isValidCuit,"CUIT inválido"),sujetoDenominacion:z.string().trim().min(1).max(160),regimen:z.string().trim().min(1).max(40),baseCents:cents,alicuotaBps:z.number().int().min(0).max(100000),importeCents:cents,fecha:z.string().date(),comprobanteId:z.string().uuid().nullable().default(null),numeroCertificado:z.string().trim().min(1).max(80)});
 
 type EmpresaFiscal={id:string;nombre:string;razonSocial:string;cuit:string;condicionIva:string;rubro:string|null;activa:boolean};
 
@@ -63,6 +73,22 @@ async function withImpuestos<T>(auth:AuthContext,url:URL,fn:(tx:Tx,empresa:Empre
 
 export async function impuestos(method:string,path:string[],req:Request){
   const [,resource,action,detail]=path; const url=new URL(req.url);
+  if(resource==="iva-simple"){
+    if(action==="liquidacion") return impuestos(method,["impuestos","liquidacion"],req);
+    if(action==="reabrir") return impuestos(method,["impuestos","reabrir"],req);
+    if(action==="exportar") return impuestos(method,["impuestos","exportar"],req);
+    if(method==="GET"&&action==="resumen"){
+      const auth=await requirePermission("impuestos","ver");const periodo=period.parse(url.searchParams.get("periodo"));
+      return withImpuestos(auth,url,async(tx,empresa)=>{
+        if(empresa.condicionIva!=="ri")throw new HttpError(409,"IVA Simple corresponde a responsables inscriptos");
+        const alicuotas=await tx.execute(sql`select c.libro,a.alicuota_codigo "codigo",sum(round(a.neto_cents*c.tipo_cambio))::float8 "netoCents",sum(round(a.iva_cents*c.tipo_cambio))::float8 "ivaCents" from imp_comprobantes c join imp_comprobante_alicuotas a on a.comprobante_id=c.id where c.periodo=${periodo} and c.estado='vigente' group by c.libro,a.alicuota_codigo order by c.libro,a.alicuota_codigo`);
+        const certificados=await tx.execute(sql`select tipo,sum(importe_cents)::float8 "importeCents" from imp_retenciones_percepciones where periodo_computo=${periodo} and estado='vigente' group by tipo`);
+        const [liquidacion]=await tx.execute(sql`select estado,totales from imp_liquidaciones where periodo=${periodo}`);
+        return ok({formulario:"F.2051",periodo,alicuotas,certificados,liquidacion:liquidacion??null});
+      });
+    }
+    throw new HttpError(404,"No existe esa ruta de IVA Simple");
+  }
   if(resource==="empresas"){
     const auth=await requirePermission("impuestos",method==="GET"?"ver":method==="POST"?"crear":method==="PATCH"?"editar":"anular");
     if(method==="GET"&&!action) return withTenant(auth.company.companyId,auth.user.id,async tx=>ok({items:await tx.execute(sql`
@@ -88,24 +114,25 @@ export async function impuestos(method:string,path:string[],req:Request){
           (select count(*)::int from imp_comprobantes where libro='ventas') ventas,
           (select count(*)::int from imp_periodos) periodos,
           (select count(*)::int from imp_liquidaciones) liquidaciones`);
-        const [config]=await tx.execute<{toleranciaCents:number;crearEnTalonDefault:boolean}>(sql`select tolerancia_cents::int "toleranciaCents",crear_en_talon_default "crearEnTalonDefault" from imp_config limit 1`);
+        const [config]=await tx.execute<{toleranciaCents:number;crearEnTalonDefault:boolean;esquemaIva:"iva_simple"|"f2002_lid";ivaSimpleDesde:string|null;coeficienteProrrateoBps:number|null}>(sql`select tolerancia_cents::int "toleranciaCents",crear_en_talon_default "crearEnTalonDefault",esquema_iva "esquemaIva",iva_simple_desde "ivaSimpleDesde",coeficiente_prorrateo_bps "coeficienteProrrateoBps" from imp_config limit 1`);
         const puntosVenta=await tx.execute<{numero:number;sistema:string}>(sql`select numero,sistema from imp_puntos_venta where activo order by numero`);
         const actividades=await tx.execute<{codigo:string;descripcion:string;principal:boolean}>(sql`select codigo,descripcion,principal from imp_actividades order by principal desc,codigo`);
-        return ok({empresa,counts,seccion:detail??null,config:config??{toleranciaCents:5,crearEnTalonDefault:false},puntosVenta,actividades});
+        const vencimientos=await tx.execute<{obligacion:string;periodo:string;fecha:string}>(sql`select obligacion,periodo,fecha from imp_vencimientos where right(${empresa.cuit},1)::int between terminacion_desde and terminacion_hasta order by fecha desc limit 12`);
+        return ok({empresa,counts,seccion:detail??null,config:config??{toleranciaCents:5,crearEnTalonDefault:false,esquemaIva:"iva_simple",ivaSimpleDesde:"202511",coeficienteProrrateoBps:null},puntosVenta,actividades,vencimientos});
       });
     }
     if(action&&z.string().uuid().safeParse(action).success&&detail==="configuracion"&&method==="PATCH"){
       const body=await readBody(req,empresaConfigSchema);
       url.searchParams.set("empresa",action);
       return withImpuestos(auth,url,async(tx,empresa)=>{
-        await tx.execute(sql`insert into imp_config(company_id,empresa_cliente_id,tolerancia_cents,crear_en_talon_default)
-          values(${auth.company.companyId},${empresa.id}::uuid,${body.toleranciaCents},${body.crearEnTalonDefault})
-          on conflict(company_id,empresa_cliente_id) do update set tolerancia_cents=excluded.tolerancia_cents,crear_en_talon_default=excluded.crear_en_talon_default,updated_at=now()`);
+        await tx.execute(sql`insert into imp_config(company_id,empresa_cliente_id,tolerancia_cents,crear_en_talon_default,esquema_iva,iva_simple_desde,coeficiente_prorrateo_bps)
+          values(${auth.company.companyId},${empresa.id}::uuid,${body.toleranciaCents},${body.crearEnTalonDefault},${body.esquemaIva},${body.ivaSimpleDesde},${body.coeficienteProrrateoBps})
+          on conflict(company_id,empresa_cliente_id) do update set tolerancia_cents=excluded.tolerancia_cents,crear_en_talon_default=excluded.crear_en_talon_default,esquema_iva=excluded.esquema_iva,iva_simple_desde=excluded.iva_simple_desde,coeficiente_prorrateo_bps=excluded.coeficiente_prorrateo_bps,updated_at=now()`);
         await tx.execute(sql`delete from imp_puntos_venta`);
         for(const numero of body.puntosVenta) await tx.execute(sql`insert into imp_puntos_venta(company_id,empresa_cliente_id,numero,sistema) values(${auth.company.companyId},${empresa.id}::uuid,${numero},'manual')`);
         await tx.execute(sql`delete from imp_actividades`);
         for(const actividad of body.actividades) await tx.execute(sql`insert into imp_actividades(company_id,empresa_cliente_id,codigo,descripcion,principal) values(${auth.company.companyId},${empresa.id}::uuid,${actividad.codigo},${actividad.descripcion},${actividad.principal})`);
-        await writeAudit(tx,{companyId:auth.company.companyId,userId:auth.user.id,action:"impuestos.configuracion.editar",entity:"imp_empresa",entityId:empresa.id,summary:`Configuración fiscal actualizada: ${empresa.nombre}`,metadata:{toleranciaCents:body.toleranciaCents,puntosVenta:body.puntosVenta,actividades:body.actividades.map(a=>a.codigo)}});
+        await writeAudit(tx,{companyId:auth.company.companyId,userId:auth.user.id,action:"impuestos.configuracion.editar",entity:"imp_empresa",entityId:empresa.id,summary:`Configuración fiscal actualizada: ${empresa.nombre}`,metadata:{toleranciaCents:body.toleranciaCents,esquemaIva:body.esquemaIva,ivaSimpleDesde:body.ivaSimpleDesde,puntosVenta:body.puntosVenta,actividades:body.actividades.map(a=>a.codigo)}});
         return ok({saved:true});
       },"exclusive");
     }
@@ -129,6 +156,67 @@ export async function impuestos(method:string,path:string[],req:Request){
     },"exclusive");
     throw new HttpError(404,"No existe esa ruta de empresas impositivas");
   }
+  if(resource==="retenciones-practicadas"){
+    const auth=await requirePermission("impuestos",method==="GET"?"ver":"crear");
+    if(method==="GET")return withImpuestos(auth,url,async tx=>{
+      const items=await tx.execute<Record<string,unknown>>(sql`select tipo,sujeto_cuit "sujetoCuit",sujeto_denominacion "sujetoDenominacion",regimen,base_cents::float8 "baseCents",alicuota_bps "alicuotaBps",importe_cents::float8 "importeCents",fecha,numero_certificado "numeroCertificado" from imp_retenciones_practicadas where estado='vigente' order by fecha,numero_certificado`);
+      if(url.searchParams.get("formato")==="csv"){const csv=`\uFEFFtipo;sujeto_cuit;sujeto;regimen;base;alicuota_bps;importe;fecha;certificado\r\n${items.map(r=>Object.values(r).map(v=>`"${String(v??"").replaceAll('"','""')}"`).join(";")).join("\r\n")}\r\n`;return new Response(csv,{headers:{"Content-Type":"text/csv; charset=utf-8","Content-Disposition":'attachment; filename="retenciones-practicadas.csv"'}});}return ok({items});
+    });
+    if(method==="POST"){const body=await readBody(req,practicadaSchema);return withImpuestos(auth,url,async tx=>{try{const[row]=await tx.execute<{id:string}>(sql`insert into imp_retenciones_practicadas(company_id,tipo,sujeto_cuit,sujeto_denominacion,regimen,base_cents,alicuota_bps,importe_cents,fecha,comprobante_id,numero_certificado,created_by) values(${auth.company.companyId},${body.tipo},${cuitDigits(body.sujetoCuit)},${body.sujetoDenominacion},${body.regimen},${body.baseCents},${body.alicuotaBps},${body.importeCents},${body.fecha}::date,${body.comprobanteId}::uuid,${body.numeroCertificado},${auth.user.id}::uuid) returning id`);return ok(row);}catch(e){if((e as{code?:string}).code==="23505")throw new HttpError(409,"El certificado ya existe");throw e;}},"exclusive");}
+  }
+  if(resource==="comprobantes"){
+    const auth=await requirePermission("impuestos",method==="GET"?"ver":method==="POST"?"crear":method==="PATCH"?"editar":"anular");
+    if(method==="POST"||method==="PATCH"){
+      const body=await readBody(req,manualSchema);
+      return withImpuestos(auth,url,async(tx,empresa)=>{
+        const [config]=await tx.execute<{tolerancia:number}>(sql`select tolerancia_cents::int tolerancia from imp_config limit 1`);
+        const errors=validarComprobanteManual({...body,creditoFiscalCents:body.creditoFiscalCents},config?.tolerancia??5);
+        if(errors.length) throw new HttpError(400,errors.join(". "));
+        const [tipo]=await tx.execute<{ok:boolean}>(sql`select true ok from imp_tipos_comprobante where codigo=${body.tipoCbte}`);if(!tipo)throw new HttpError(400,"Tipo de comprobante inexistente");
+        const [closed]=await tx.execute<{closed:boolean}>(sql`select exists(select 1 from imp_periodos where periodo=${body.periodo} and estado='cerrado') closed`);if(closed.closed)throw new HttpError(409,mensajePeriodoCerrado(body.periodo));
+        let row:{id:string}|undefined;
+        try{
+          if(method==="PATCH"){
+            const [current]=await tx.execute<{origen:string}>(sql`select origen from imp_comprobantes where id=${action}::uuid`);if(!current)throw new HttpError(404,"No existe el comprobante");if(current.origen!=="manual")throw new HttpError(409,"Sólo se pueden editar comprobantes cargados manualmente");
+            [row]=await tx.execute<{id:string}>(sql`update imp_comprobantes set libro=${body.libro},fecha_cbte=${body.fecha}::date,periodo=${body.periodo},tipo_cbte=${body.tipoCbte},punto_venta=${body.puntoVenta},numero_desde=${body.numero}::bigint,numero_hasta=${body.numero}::bigint,doc_nro_emisor=${body.libro==="ventas"?empresa.cuit:cuitDigits(body.docNro)},doc_tipo=${body.docTipo},doc_nro=${cuitDigits(body.docNro)},denominacion=${body.denominacion},moneda=${body.moneda},tipo_cambio=${body.tipoCambio},neto_no_gravado_cents=${body.noGravadoCents},exento_cents=${body.exentoCents},otros_tributos_cents=${body.tributosCents},total_cents=${body.totalCents},credito_fiscal_computable_cents=${body.creditoFiscalCents},destino_credito=${body.destinoCredito},prorratea=${body.destinoCredito==="prorratea"},updated_at=now() where id=${action}::uuid returning id`);
+            await tx.execute(sql`delete from imp_comprobante_alicuotas where comprobante_id=${row.id}::uuid`);
+          }else [row]=await tx.execute<{id:string}>(sql`insert into imp_comprobantes(company_id,libro,origen,fecha_cbte,periodo,tipo_cbte,punto_venta,numero_desde,numero_hasta,doc_nro_emisor,doc_tipo,doc_nro,denominacion,moneda,tipo_cambio,neto_no_gravado_cents,exento_cents,otros_tributos_cents,total_cents,credito_fiscal_computable_cents,destino_credito,prorratea,created_by) values(${auth.company.companyId},${body.libro},'manual',${body.fecha}::date,${body.periodo},${body.tipoCbte},${body.puntoVenta},${body.numero}::bigint,${body.numero}::bigint,${body.libro==="ventas"?empresa.cuit:cuitDigits(body.docNro)},${body.docTipo},${cuitDigits(body.docNro)},${body.denominacion},${body.moneda},${body.tipoCambio},${body.noGravadoCents},${body.exentoCents},${body.tributosCents},${body.totalCents},${body.creditoFiscalCents},${body.destinoCredito},${body.destinoCredito==="prorratea"},${auth.user.id}::uuid) returning id`);
+          for(const a of body.alicuotas)await tx.execute(sql`insert into imp_comprobante_alicuotas(company_id,comprobante_id,alicuota_codigo,neto_cents,iva_cents) values(${auth.company.companyId},${row.id}::uuid,${a.codigo},${a.netoCents},${a.ivaCents})`);
+          await writeAudit(tx,{companyId:auth.company.companyId,userId:auth.user.id,action:`impuestos.comprobante.${method==="POST"?"crear":"editar"}`,entity:"imp_comprobante",entityId:row.id,summary:`Comprobante manual ${body.puntoVenta}-${body.numero}`,metadata:{libro:body.libro,periodo:body.periodo}});
+          return ok(row);
+        }catch(e){if((e as {code?:string}).code==="23505")throw new HttpError(409,"El comprobante ya existe");if(esErrorPeriodoCerrado(e))throw new HttpError(409,mensajePeriodoCerrado(body.periodo));throw e;}
+      },"exclusive");
+    }
+    if(method==="DELETE"&&action){const body=await readBody(req,z.object({motivo:z.string().trim().min(5).max(500)}));return withImpuestos(auth,url,async tx=>{const [row]=await tx.execute<{id:string;periodo:string}>(sql`select id,periodo from imp_comprobantes where id=${action}::uuid and estado='vigente'`);if(!row)throw new HttpError(404,"No existe el comprobante");try{await tx.execute(sql`update imp_comprobantes set estado='anulado',avisos=avisos||${JSON.stringify([body.motivo])}::jsonb,updated_at=now() where id=${row.id}::uuid`);}catch(e){if(esErrorPeriodoCerrado(e))throw new HttpError(409,mensajePeriodoCerrado(row.periodo));throw e;}return ok({deleted:true});},"exclusive");}
+  }
+  if(resource==="retenciones-percepciones"){
+    const auth=await requirePermission("impuestos",method==="GET"?"ver":method==="POST"?"crear":method==="PATCH"?"editar":"anular");
+    if(method==="GET"){
+      const periodo=url.searchParams.get("periodo"); if(periodo) period.parse(periodo);
+      return withImpuestos(auth,url,async tx=>ok({items:await tx.execute(sql`select id,tipo,regimen,agente_cuit "agenteCuit",agente_denominacion "agenteDenominacion",fecha,numero_certificado "numeroCertificado",importe_cents::float8 "importeCents",periodo_origen "periodoOrigen",periodo_computo "periodoComputo",comprobante_id "comprobanteId",origen,estado
+        from imp_retenciones_percepciones where estado='vigente' and (${periodo}::text is null or periodo_computo=${periodo}) order by fecha,numero_certificado`)}));
+    }
+    if(method==="POST"||method==="PATCH"){
+      const body=await readBody(req,rpSchema); const error=validarPeriodoComputo(body.tipo,body.periodoOrigen,body.periodoComputo); if(error) throw new HttpError(400,error);
+      return withImpuestos(auth,url,async(tx,empresa)=>{
+        const [closed]=await tx.execute<{closed:boolean}>(sql`select exists(select 1 from imp_periodos where periodo=${body.periodoComputo} and estado='cerrado') closed`);
+        if(closed.closed) throw new HttpError(409,mensajePeriodoCerrado(body.periodoComputo));
+        try{
+          const [row]=method==="POST"
+            ?await tx.execute<{id:string}>(sql`insert into imp_retenciones_percepciones(company_id,tipo,regimen,agente_cuit,agente_denominacion,fecha,numero_certificado,importe_cents,periodo_origen,periodo_computo,comprobante_id,created_by) values(${auth.company.companyId},${body.tipo},${body.regimen},${cuitDigits(body.agenteCuit)},${body.agenteDenominacion},${body.fecha}::date,${body.numeroCertificado},${body.importeCents},${body.periodoOrigen},${body.periodoComputo},${body.comprobanteId}::uuid,${auth.user.id}::uuid) returning id`)
+            :await tx.execute<{id:string}>(sql`update imp_retenciones_percepciones set tipo=${body.tipo},regimen=${body.regimen},agente_cuit=${cuitDigits(body.agenteCuit)},agente_denominacion=${body.agenteDenominacion},fecha=${body.fecha}::date,numero_certificado=${body.numeroCertificado},importe_cents=${body.importeCents},periodo_origen=${body.periodoOrigen},periodo_computo=${body.periodoComputo},comprobante_id=${body.comprobanteId}::uuid,updated_at=now() where id=${action}::uuid returning id`);
+          if(!row) throw new HttpError(404,"No existe el certificado");
+          await writeAudit(tx,{companyId:auth.company.companyId,userId:auth.user.id,action:`impuestos.certificado.${method==="POST"?"crear":"editar"}`,entity:"imp_retencion_percepcion",entityId:row.id,summary:`Certificado actualizado: ${body.numeroCertificado}`,metadata:{empresa:empresa.id,tipo:body.tipo,periodoComputo:body.periodoComputo}});
+          return ok(row);
+        }catch(e){if((e as {code?:string}).code==="23505") throw new HttpError(409,"El certificado ya fue cargado");throw e;}
+      },"exclusive");
+    }
+    if(method==="DELETE"&&action) return withImpuestos(auth,url,async tx=>{
+      const [row]=await tx.execute<{id:string;periodo:string}>(sql`select id,periodo_computo periodo from imp_retenciones_percepciones where id=${action}::uuid and estado='vigente'`);if(!row)throw new HttpError(404,"No existe el certificado");
+      const [closed]=await tx.execute<{closed:boolean}>(sql`select exists(select 1 from imp_periodos where periodo=${row.periodo} and estado='cerrado') closed`);if(closed.closed)throw new HttpError(409,mensajePeriodoCerrado(row.periodo));
+      await tx.execute(sql`update imp_retenciones_percepciones set estado='anulado',updated_at=now() where id=${row.id}::uuid`);return ok({deleted:true});
+    },"exclusive");
+  }
   if(method==="GET"&&resource==="importar-rechazos"&&action){
     const auth=await requirePermission("impuestos","importar");
     return withImpuestos(auth,url,async tx=>{
@@ -137,6 +225,10 @@ export async function impuestos(method:string,path:string[],req:Request){
       const csv=`\uFEFFfila;motivo;valores\r\n${rows.map(r=>`${r.fila};${quote(r.motivo)};${quote(JSON.stringify(r.raw))}`).join("\r\n")}${rows.length?"\r\n":""}`;
       return new Response(csv,{headers:{"Content-Type":"text/csv; charset=utf-8","Content-Disposition":`attachment; filename="rechazos-${action}.csv"`,"Cache-Control":"private, no-store"}});
     });
+  }
+  if(method==="POST"&&resource==="deshacer-importacion"&&action){
+    const auth=await requirePermission("impuestos","anular");const body=await readBody(req,z.object({motivo:z.string().trim().min(5).max(500)}));
+    return withImpuestos(auth,url,async tx=>{try{const rows=await tx.execute<{id:string}>(sql`update imp_comprobantes c set estado='anulado',avisos=c.avisos||${JSON.stringify([body.motivo])}::jsonb,updated_at=now() from imp_import_rows r where r.job_id=${action}::uuid and r.comprobante_id=c.id and c.estado='vigente' returning c.id`);await writeAudit(tx,{companyId:auth.company.companyId,userId:auth.user.id,action:"impuestos.importacion.deshacer",entity:"imp_import_job",entityId:action,summary:`Importación anulada: ${rows.length} comprobantes`,metadata:{motivo:body.motivo}});return ok({anulados:rows.length});}catch(e){if(esErrorPeriodoCerrado(e))throw new HttpError(409,"La importación contiene comprobantes de un período confirmado. Reabrilo antes de deshacer.");throw e;}},"exclusive");
   }
   if(method==="GET"&&resource==="libro"){
     const auth=await requirePermission("impuestos","ver"); const libro=action;
@@ -162,6 +254,7 @@ export async function impuestos(method:string,path:string[],req:Request){
       },file,body.fileName,body.periodo,body.crearEnTalon)),"exclusive");
     } catch(error) {
       if(error instanceof ImportValidationError) throw new HttpError(error.status,error.message);
+      if(esErrorPeriodoCerrado(error)) throw new HttpError(409,mensajePeriodoCerrado(body.periodo));
       throw error;
     }
   }
@@ -171,10 +264,10 @@ export async function impuestos(method:string,path:string[],req:Request){
       const receipts=await tx.execute<Record<string,unknown>>(sql`select * from imp_comprobantes where periodo=${periodo} and estado='vigente' order by libro,fecha_cbte,punto_venta,numero_desde,id`);
       const rates=await tx.execute<Record<string,unknown>>(sql`select a.* from imp_comprobante_alicuotas a join imp_comprobantes c on c.id=a.comprobante_id where c.periodo=${periodo} and c.estado='vigente' order by a.alicuota_codigo`);
       const built=buildLibroIvaDigital(receipts,rates);
-      const zip=makeZip(Object.entries(built.files).map(([name,content])=>({name:`${name}_${periodo}.txt`,data:toAnsi(content)})));
+      const zip=makeZip(Object.entries(built.files).filter(([,content])=>content.length>0).map(([name,content])=>({name:`${name}_${periodo}.txt`,data:toAnsi(content)})));
       if(url.searchParams.get("formato")==="zip") return new Response(new Uint8Array(zip),{headers:{"Content-Type":"application/zip","Content-Disposition":`attachment; filename="libro-iva-digital-${periodo}.zip"`,"Cache-Control":"private, no-store"}});
       const spreadsheetRows=receipts.map(r=>({Libro:r.libro,Fecha:String(r.fecha_cbte).slice(0,10),Tipo:r.tipo_cbte,"Punto de venta":r.punto_venta,Número:r.numero_desde,Contraparte:r.denominacion,Moneda:r.moneda,"Tipo de cambio":Number(r.tipo_cambio),Total:convertirCentsAPesos(Number(r.total_cents),Number(r.tipo_cambio))/100,"Crédito fiscal":convertirCentsAPesos(Number(r.credito_fiscal_computable_cents),Number(r.tipo_cambio))/100}));
-      const csv=`\uFEFFLibro;Fecha;Tipo;Punto de venta;Número;Contraparte;Total;Crédito fiscal\r\n${spreadsheetRows.map(r=>Object.values(r).map(v=>`"${(typeof v==="number"?v.toFixed(2).replace(".",","):String(v??"")).replaceAll('"','""')}"`).join(";")).join("\r\n")}${spreadsheetRows.length?"\r\n":""}`;
+      const csv=`\uFEFFLibro;Fecha;Tipo;Punto de venta;Número;Contraparte;Moneda;Tipo de cambio;Total;Crédito fiscal\r\n${spreadsheetRows.map(r=>Object.values(r).map(v=>`"${(typeof v==="number"?v.toFixed(2).replace(".",","):String(v??"")).replaceAll('"','""')}"`).join(";")).join("\r\n")}${spreadsheetRows.length?"\r\n":""}`;
       const workbook=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(workbook,XLSX.utils.json_to_sheet(spreadsheetRows),"Libro IVA");
       return ok({periodo,files:built.files,avisos:built.avisos,zipBase64:zip.toString("base64"),csv,xlsxBase64:XLSX.write(workbook,{type:"base64",bookType:"xlsx"})});
     });
@@ -190,12 +283,15 @@ export async function impuestos(method:string,path:string[],req:Request){
   }
   if(method==="POST"&&resource==="liquidacion"){
     const auth=await requirePermission("impuestos","crear"); const body=await readBody(req,confirmSchema);
-    return withImpuestos(auth,url,async tx=>{
-      const rows=await tx.execute<{libro:"ventas"|"compras";signo:number;iva:string;credito:string;percep:string;tipoCambio:number}>(sql`
-        select c.libro,t.signo,coalesce(a.iva_cents,0)::text iva,
+    return withImpuestos(auth,url,async(tx,empresa)=>{
+      if(!puedeLiquidarF2002(empresa.condicionIva)) throw new HttpError(409,"La liquidación de IVA corresponde a responsables inscriptos");
+      const rows=await tx.execute<{libro:"ventas"|"compras";signo:number;iva:string;neto:string;credito:string;percep:string;tipoCambio:number;destino:string;exento:string;noGravado:string}>(sql`
+        select c.libro,t.signo,coalesce(a.iva_cents,0)::text iva,coalesce(a.neto_cents,0)::text neto,
           (case when c.credito_fiscal_computable_cents<>0 then coalesce(a.iva_cents,0) else 0 end)::text credito,
           (case when row_number() over(partition by c.id order by a.id nulls first)=1 then c.percep_iva_cents else 0 end)::text percep,
-          c.tipo_cambio::float8 "tipoCambio"
+          c.tipo_cambio::float8 "tipoCambio",c.destino_credito destino,
+          (case when row_number() over(partition by c.id order by a.id nulls first)=1 then c.exento_cents else 0 end)::text exento,
+          (case when row_number() over(partition by c.id order by a.id nulls first)=1 then c.neto_no_gravado_cents else 0 end)::text "noGravado"
         from imp_comprobantes c join imp_tipos_comprobante t on t.codigo=c.tipo_cbte left join imp_comprobante_alicuotas a on a.comprobante_id=c.id
         where c.periodo=${body.periodo} and c.estado='vigente'`);
       const [actual]=await tx.execute<{estado:string}>(sql`select estado from imp_liquidaciones where periodo=${body.periodo}`);
@@ -208,8 +304,16 @@ export async function impuestos(method:string,path:string[],req:Request){
       const tecnicoManual=body.saldoTecnicoAnteriorCents!=null&&body.saldoTecnicoAnteriorCents!==(arrastre?.saldoTecnicoAnteriorCents??0);
       const libreManual=body.saldoLibreAnteriorCents!=null&&body.saldoLibreAnteriorCents!==(arrastre?.saldoLibreAnteriorCents??0);
       if(prev&&(tecnicoManual||libreManual)) avisos.push(`Los saldos anteriores cargados a mano difieren de la liquidación confirmada de ${fmtPeriodo(anterior)}.`);
-      const ajustes={...body,saldoTecnicoAnteriorCents:body.saldoTecnicoAnteriorCents??arrastre?.saldoTecnicoAnteriorCents??0,saldoLibreAnteriorCents:body.saldoLibreAnteriorCents??arrastre?.saldoLibreAnteriorCents??0};
-      const totals={...calcularLiquidacion(rows.map(r=>({libro:r.libro,signo:r.signo as 1|-1,ivaCents:Number(r.iva),creditoComputableCents:r.libro==="compras"?Number(r.credito):undefined,percepIvaCents:Number(r.percep),tipoCambio:Number(r.tipoCambio)})),ajustes),periodoAnterior:anterior,saldosAnterioresAutomaticos:Boolean(prev)&&!tecnicoManual&&!libreManual};
+      const certificados=await tx.execute<{tipo:"retencion"|"percepcion";total:number}>(sql`select tipo,sum(importe_cents)::float8 total from imp_retenciones_percepciones where periodo_computo=${body.periodo} and estado='vigente' group by tipo`);
+      const automatico=(tipo:"retencion"|"percepcion")=>certificados.find(r=>r.tipo===tipo)?.total??0;
+      const ventas=rows.filter(r=>r.libro==="ventas");
+      const gravadas=ventas.reduce((n,r)=>n+convertirCentsAPesos(Number(r.neto),r.tipoCambio)*r.signo,0);
+      const exentas=ventas.reduce((n,r)=>n+convertirCentsAPesos(Number(r.exento),r.tipoCambio)*r.signo,0);
+      const noGravadas=ventas.reduce((n,r)=>n+convertirCentsAPesos(Number(r.noGravado),r.tipoCambio)*r.signo,0);
+      const [prorrateoConfig]=await tx.execute<{coeficiente:number|null}>(sql`select coeficiente_prorrateo_bps coeficiente from imp_config limit 1`);
+      const coeficienteUsado=prorrateoConfig?.coeficiente??coeficienteProrrateo(gravadas,exentas,noGravadas);
+      const ajustes={...body,retencionesCents:body.retencionesCents+automatico("retencion"),percepcionesCents:body.percepcionesCents+automatico("percepcion"),saldoTecnicoAnteriorCents:body.saldoTecnicoAnteriorCents??arrastre?.saldoTecnicoAnteriorCents??0,saldoLibreAnteriorCents:body.saldoLibreAnteriorCents??arrastre?.saldoLibreAnteriorCents??0};
+      const totals={...calcularLiquidacion(rows.map(r=>({libro:r.libro,signo:r.signo as 1|-1,ivaCents:Number(r.iva),creditoComputableCents:r.libro==="compras"?(r.destino==="directo_exento"?0:r.destino==="prorratea"?aplicarProrrateo(Number(r.iva),coeficienteUsado):Number(r.credito)):undefined,percepIvaCents:Number(r.percep),tipoCambio:Number(r.tipoCambio)})),ajustes),coeficienteProrrateoBps:coeficienteUsado,periodoAnterior:anterior,saldosAnterioresAutomaticos:Boolean(prev)&&!tecnicoManual&&!libreManual};
       const items=itemsLiquidacion(totals,{saldoTecnicoAnterior:tecnicoManual||(!prev&&ajustes.saldoTecnicoAnteriorCents>0),saldoLibreAnterior:libreManual||(!prev&&ajustes.saldoLibreAnteriorCents>0),percepciones:body.percepcionesCents>0,retenciones:body.retencionesCents>0,pagosCuenta:body.pagosCuentaCents>0,seguridadSocial:body.seguridadSocialCents>0});
       const state=body.confirmar?"confirmada":"borrador"; const snapshot=body.confirmar?JSON.stringify({totals,inputs:ajustes,items}):null;
       let saved:Record<string,unknown>;
