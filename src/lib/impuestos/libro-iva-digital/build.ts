@@ -35,6 +35,7 @@ export function buildLibroIvaDigital(receipts: Row[], rates: Row[]) {
       moneda: String(r.moneda ?? "PES"), tipoCambio: cambio, cantidadAlicuotas: alicuotas.length,
       codigoOperacion: informa ? codigoOperacion({ alicuotas, exentoCents: pesos(r.exento_cents, cambio), noGravadoCents: pesos(r.neto_no_gravado_cents, cambio), importacion }) : "0",
       creditoFiscalCents: pesos(r.credito_fiscal_computable_cents, cambio),
+      fechaVencimientoPago: r.fecha_vencimiento_pago ? String(r.fecha_vencimiento_pago) : null,
     };
     const ali = alicuotas.map((a) => ({ tipoCbte: tipo, puntoVenta: row.puntoVenta, numero: row.numeroDesde, docTipo: row.docTipo, docNro: row.docNro, despacho, ...a }));
     if (compras) { comprasCbte.push(row); (importacion ? importAli : comprasAli).push(...ali); }

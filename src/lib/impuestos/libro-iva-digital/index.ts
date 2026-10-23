@@ -29,6 +29,7 @@ export type LibroRow = {
   internosCents?: number; otrosTributosCents?: number;
   moneda?: string; tipoCambio?: number;
   cantidadAlicuotas?: number; codigoOperacion?: string; creditoFiscalCents?: number;
+  fechaVencimientoPago?: string | null;
 };
 export type AlicuotaRow = { tipoCbte: number; puntoVenta: number; numero: string | number; docTipo?: number; docNro?: string; despacho?: string | null; netoCents: number; codigo: number; ivaCents: number };
 
@@ -70,7 +71,7 @@ export const VENTAS_CBTE: FixedField<LibroRow>[] = [
   field(19, 242, 242, "N", "Cantidad de alícuotas de IVA", (r) => r.cantidadAlicuotas ?? 0),
   field(20, 243, 243, "A", "Código de operación", (r) => r.codigoOperacion ?? "0"),
   field(21, 244, 258, "N", "Otros tributos", (r) => amt(r.otrosTributosCents)),
-  field(22, 259, 266, "N", "Fecha de vencimiento de pago", () => 0),
+  field(22, 259, 266, "N", "Fecha de vencimiento de pago", (r) => r.fechaVencimientoPago ? fecha({fecha:r.fechaVencimientoPago}) : 0),
 ];
 
 // LIBRO_IVA_DIGITAL_VENTAS_ALICUOTAS — longitud 62

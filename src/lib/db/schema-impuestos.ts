@@ -95,6 +95,9 @@ export const impConfig = pgTable("imp_config", {
   crearEnTalonDefault: boolean("crear_en_talon_default").notNull().default(false),
   prorrateaDefault: boolean("prorratea_default").notNull().default(false),
   modoProrrateoDefault: text("modo_prorrateo_default").notNull().default("global"),
+  coeficienteProrrateoBps: integer("coeficiente_prorrateo_bps"),
+  esquemaIva: text("esquema_iva").notNull().default("iva_simple"),
+  ivaSimpleDesde: text("iva_simple_desde").default("202511"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [primaryKey({ columns: [table.companyId, table.empresaClienteId] })]);
 
@@ -173,6 +176,7 @@ export const impComprobantes = pgTable("imp_comprobantes", {
   sourceDocumentId: uuid("source_document_id"),
   importRowId: uuid("import_row_id"),
   fechaCbte: date("fecha_cbte", { mode: "string" }).notNull(),
+  fechaVencimientoPago: date("fecha_vencimiento_pago", { mode: "string" }),
   periodo: text("periodo").notNull(),
   tipoCbte: integer("tipo_cbte").notNull(),
   puntoVenta: integer("punto_venta").notNull(),
@@ -199,6 +203,7 @@ export const impComprobantes = pgTable("imp_comprobantes", {
   totalCents: bigint("total_cents", { mode: "number" }).notNull(),
   tipoOperacion: text("tipo_operacion").notNull().default("otros"),
   creditoFiscalComputableCents: bigint("credito_fiscal_computable_cents", { mode: "number" }).notNull().default(0),
+  destinoCredito: text("destino_credito").notNull().default("directo_gravado"),
   prorratea: boolean("prorratea").notNull().default(false),
   estado: text("estado").notNull().default("vigente"),
   requiereRevision: boolean("requiere_revision").notNull().default(false),
