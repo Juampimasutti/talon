@@ -1,0 +1,3 @@
+import{describe,expect,it}from"vitest";import{proximoVencimiento,type Vencimiento}from"./vencimientos";
+const rows:Vencimiento[]=[0,2,4,6,8].map((n,i)=>({obligacion:"iva_simple",periodo:"202609",terminacionDesde:n,terminacionHasta:n+1,fecha:`2026-10-${19+i}`,fuenteUrl:"oficial"}));
+describe("vencimientos",()=>{it("elige por terminación de CUIT",()=>{for(let n=0;n<10;n++){const cuit=`2011111111${n}`;expect(proximoVencimiento(cuit,"iva_simple","202609",rows)?.terminacionDesde).toBe(Math.floor(n/2)*2);}});it("sin tabla devuelve null",()=>expect(proximoVencimiento("20111111112","iva_simple","202610",rows)).toBeNull());});
